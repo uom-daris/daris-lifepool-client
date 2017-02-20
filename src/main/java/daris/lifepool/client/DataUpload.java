@@ -558,7 +558,8 @@ public class DataUpload {
         XmlStringWriter w = new XmlStringWriter();
         w.add("cid", datasetCid);
 
-        // NOTE: code commented out below are replaced by calling vicnode.lifepool.metadata.extract service
+        // NOTE: code commented out below are replaced by calling
+        // vicnode.lifepool.metadata.extract service
         // @formatter:off      
 //        w.add("doc-tag", "pssd.meta");
 //        w.add("if-exists", "merge");
