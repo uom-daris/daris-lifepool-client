@@ -557,19 +557,27 @@ public class DataUpload {
 
         XmlStringWriter w = new XmlStringWriter();
         w.add("cid", datasetCid);
-        w.add("doc-tag", "pssd.meta");
-        w.add("tag", "00080008"); // ImageType
-        w.add("tag", "00080018"); // SOPInstanceUID
-        w.add("tag", "00080050"); // AccessionNumber
-        w.add("tag", "00080068"); // PresentationIntentType
-        w.add("tag", "00080070"); // Manufacturer
-        w.add("tag", "00080080"); // InstitutionName
-        w.add("tag", "00081090"); // ManufacturerModelName
-        w.add("tag", "00181400"); // AcquisitionDeviceProcessingDescription
-        w.add("tag", "00185101"); // ViewPosition
-        w.add("tag", "00200062"); // ImageLaterality
 
-        cxn.execute("dicom.metadata.populate", w.document());
+        // NOTE: code commented out below are replaced by calling vicnode.lifepool.metadata.extract service
+        // @formatter:off      
+//        w.add("doc-tag", "pssd.meta");
+//        w.add("if-exists", "merge");
+//        w.add("tag", "00080008"); // ImageType
+//        w.add("tag", "00080018"); // SOPInstanceUID
+//        w.add("tag", "00080050"); // AccessionNumber
+//        w.add("tag", "00080060"); // Modality
+//        w.add("tag", "00080068"); // PresentationIntentType
+//        w.add("tag", "00080070"); // Manufacturer
+//        w.add("tag", "00080080"); // InstitutionName
+//        w.add("tag", "0008103E"); // SeriesDescription
+//        w.add("tag", "00081090"); // ManufacturerModelName
+//        w.add("tag", "00181400"); // AcquisitionDeviceProcessingDescription
+//        w.add("tag", "00185101"); // ViewPosition
+//        w.add("tag", "00200062"); // ImageLaterality
+//        cxn.execute("dicom.metadata.populate", w.document());
+        // @formatter:on
+
+        cxn.execute("vicnode.lifepool.metadata.extract", w.document());
     }
 
     private static void updateStudyName(ServerClient.Connection cxn, String studyCid, AttributeList attributeList)
