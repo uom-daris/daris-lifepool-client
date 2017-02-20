@@ -559,7 +559,7 @@ public class DataUpload {
         w.add("cid", datasetCid);
 
         // NOTE: code commented out below are replaced by calling
-        // vicnode.lifepool.metadata.extract service
+        // vicnode.daris.lifepool.metadata.extract service
         // @formatter:off      
 //        w.add("doc-tag", "pssd.meta");
 //        w.add("if-exists", "merge");
@@ -578,7 +578,7 @@ public class DataUpload {
 //        cxn.execute("dicom.metadata.populate", w.document());
         // @formatter:on
 
-        cxn.execute("vicnode.lifepool.metadata.extract", w.document());
+        cxn.execute("vicnode.daris.lifepool.metadata.extract", w.document());
     }
 
     private static void updateStudyName(ServerClient.Connection cxn, String studyCid, AttributeList attributeList)
