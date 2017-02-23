@@ -5,7 +5,7 @@
 	<modelVersion>4.0.0</modelVersion>
 	<groupId>au.edu.unimelb.daris</groupId>
 	<artifactId>daris-lifepool-client</artifactId>
-	<version>0.0.2</version>
+	<version>0.0.3</version>
 	<name>daris-lifepool-client</name>
 	<description>DaRIS client for Lifepool Mammogram Projects</description>
 	<url>https://github.com/uom-daris/daris-lifepool-client</url>
@@ -15,8 +15,8 @@
 	</organization>
 	<properties>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-		<maven.compiler.source>1.7</maven.compiler.source>
-		<maven.compiler.target>1.7</maven.compiler.target>
+		<maven.compiler.source>1.8</maven.compiler.source>
+		<maven.compiler.target>1.8</maven.compiler.target>
 		<maven.build.timestamp.format>dd-MMM-yyyy HH:mm:ss z</maven.build.timestamp.format>
 		<require.mflux.version>4.4.045</require.mflux.version>
 	</properties>

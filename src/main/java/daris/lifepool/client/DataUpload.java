@@ -16,6 +16,7 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Stream;
 
 import com.pixelmed.dicom.Attribute;
 import com.pixelmed.dicom.AttributeList;
@@ -52,6 +53,7 @@ public class DataUpload {
         String mfToken = null;
         String mfSid = null;
         String pid = null;
+        File patientIdMapFile = null;
         List<File> inputs = new ArrayList<File>();
         try {
             for (int i = 0; i < args.length;) {
@@ -132,17 +134,29 @@ public class DataUpload {
                     }
                     pid = args[i + 1];
                     i += 2;
+                } else if (args[i].equals("--patient.id.map")) {
+                    if (patientIdMapFile != null) {
+                        throw new Exception("--patient.id.map has already been specified.");
+                    }
+                    patientIdMapFile = new File(args[i + 1]);
+                    if (!patientIdMapFile.exists()) {
+                        throw new FileNotFoundException("File " + args[i + 1] + " is not found.");
+                    }
+                    i += 2;
                 } else {
-                    File f = Paths.get(args[i]).toFile();
-                    if (!f.exists()) {
+                    File input = new File(args[i]);
+                    if (!input.exists()) {
                         throw new FileNotFoundException("File " + args[i] + " is not found.");
                     }
-                    inputs.add(f);
+                    inputs.add(input);
                     i++;
                 }
             }
             if (pid == null) {
                 throw new Exception("--pid is not specified.");
+            }
+            if (patientIdMapFile == null) {
+                throw new Exception("--patient.id.map is not specified.");
             }
             if (inputs.isEmpty()) {
                 throw new Exception("No input dicom file/directory is specified.");
@@ -159,6 +173,10 @@ public class DataUpload {
             if (mfAuth == null && mfSid == null && mfToken == null) {
                 throw new Exception("You need to specify one of mf.auth, mf.token or mf.sid. Found none.");
             }
+            System.out
+                    .print("loading accession.number->patient.id mapping file: " + patientIdMapFile.getCanonicalPath());
+            Map<String, String> patientIdMap = loadPatientIdMap(patientIdMapFile);
+            System.out.println("done.");
             RemoteServer server = new RemoteServer(mfHost, mfPort, useHttp, encrypt);
             final ServerClient.Connection cxn = server.open();
             try {
@@ -176,14 +194,12 @@ public class DataUpload {
                 }
                 final String projectCid = pid;
                 for (File input : inputs) {
-                    if (input.isFile()) {
-                        uploadDicomFile(cxn, input, projectCid);
-                    } else {
+                    if (input.isDirectory()) {
                         Files.walkFileTree(input.toPath(), new SimpleFileVisitor<Path>() {
                             @Override
                             public FileVisitResult visitFile(Path path, BasicFileAttributes attrs) throws IOException {
                                 try {
-                                    uploadDicomFile(cxn, path.toFile(), projectCid);
+                                    uploadDicomFile(cxn, path.toFile(), projectCid, patientIdMap);
                                 } catch (Throwable e) {
                                     e.printStackTrace(System.err);
                                 }
@@ -196,6 +212,8 @@ public class DataUpload {
                                 return FileVisitResult.SKIP_SUBTREE;
                             }
                         });
+                    } else {
+                        uploadDicomFile(cxn, input, projectCid, patientIdMap);
                     }
                 }
             } finally {
@@ -211,19 +229,21 @@ public class DataUpload {
         System.out.println(
                 "Usage: data-upload [--help] --mf.host <host> --mf.port <port> --mf.transport <transport> [--mf.sid <sid>|--mf.token <token>|--mf.auth <domain,user,password>] --pid <project-cid> <dicom-files/dicom-directories>");
         System.out.println("Description:");
-        System.out.println("    --mf.host <host>                 The Mediaflux server host.");
-        System.out.println("    --mf.port <port>                 The Mediaflux server port.");
+        System.out.println("    --mf.host <host>                     The Mediaflux server host.");
+        System.out.println("    --mf.port <port>                     The Mediaflux server port.");
         System.out.println(
-                "    --mf.transport <transport>       The Mediaflux server transport, can be http, https or tcp/ip.");
-        System.out.println("    --mf.auth <domain,user,password> The Mediaflux user authentication deatils.");
-        System.out.println("    --mf.token <token>               The Mediaflux secure identity token.");
-        System.out.println("    --mf.sid <sid>                   The Mediaflux session id.");
-        System.out.println("    --pid <project-cid>              The DaRIS project cid.");
-        System.out.println("    --help                           Display help information.");
+                "    --mf.transport <transport>           The Mediaflux server transport, can be http, https or tcp/ip.");
+        System.out.println("    --mf.auth <domain,user,password>     The Mediaflux user authentication deatils.");
+        System.out.println("    --mf.token <token>                   The Mediaflux secure identity token.");
+        System.out.println("    --mf.sid <sid>                       The Mediaflux session id.");
+        System.out.println("    --pid <project-cid>                  The DaRIS project cid.");
+        System.out.println(
+                "    --patient.id.map <paitent-id-map>    The file contains AccessionNumber -> PatientID mapping.");
+        System.out.println("    --help                               Display help information.");
     }
 
-    public static void uploadDicomFile(ServerClient.Connection cxn, File dicomFile, String projectCid)
-            throws Throwable {
+    public static void uploadDicomFile(ServerClient.Connection cxn, File dicomFile, String projectCid,
+            Map<String, String> patientIdMap) throws Throwable {
 
         if (!DicomFileUtilities.isDicomOrAcrNemaFile(dicomFile)) {
             System.out.println("\"" + dicomFile.getCanonicalPath() + "\" is not a dicom file.");
@@ -232,6 +252,14 @@ public class DataUpload {
 
         AttributeList attributeList = new AttributeList();
         attributeList.read(dicomFile);
+
+        /*
+         * AccessionNumber:
+         */
+        String accessionNumber = Attribute.getSingleStringValueOrNull(attributeList, TagFromName.AccessionNumber);
+        if (accessionNumber == null) {
+            throw new Exception("No AccessionNumber is found in DICOM file header.");
+        }
 
         /*
          * SeriesInstanceUID: unique identifier for the series
@@ -271,6 +299,13 @@ public class DataUpload {
         Map<AttributeTag, String> attributeValues = new HashMap<AttributeTag, String>(1);
         attributeValues.put(TagFromName.PatientName, projectCid);
 
+        String patientId = patientIdMap.get(accessionNumber);
+        if (patientId == null) {
+            throw new Exception("Could not find PatientID in mapping file for AccessionNumber: " + accessionNumber);
+        }
+
+        attributeValues.put(TagFromName.PatientID, patientId);
+
         try {
             DicomModify.modify(dicomFile, attributeValues, modifiedDicomFile);
 
@@ -290,13 +325,15 @@ public class DataUpload {
                 String studyCid = CiteableIdUtils.parent(firstDatasetCid);
                 System.out.println("created study " + studyCid + ".");
 
-                System.out.print("updating study " + studyCid + "...");
+                System.out.print("updating study " + studyCid + "(accession.number=" + accessionNumber + ")...");
                 updateStudyName(cxn, studyCid, attributeList);
                 System.out.println("done.");
 
-                // destory the newly ingested first dataset (then re-create it
+                // destory the newly ingested first dataset (then re-create
+                // it
                 // using om.pssd.dataset.derivation.create)
-                cxn.execute("om.pssd.object.destroy", "<hard-destroy>true</hard-destroy><cid>" + firstDatasetCid + "</cid>");
+                cxn.execute("om.pssd.object.destroy",
+                        "<hard-destroy>true</hard-destroy><cid>" + firstDatasetCid + "</cid>");
             }
             /*
              * create dataset
@@ -597,6 +634,24 @@ public class DataUpload {
             cxn.execute("asset.set", w.document());
         }
 
+    }
+
+    private static Map<String, String> loadPatientIdMap(File file) throws Throwable {
+        Map<String, String> map = new HashMap<String, String>((120000 * 4 + 2) / 3);
+        try (Stream<String> stream = Files.lines(file.toPath())) {
+            stream.forEach(line -> {
+                if (line.matches("^\\ *\\d+\\ *,.+")) {
+                    String[] tokens = line.trim().split("\\ *,\\ *");
+                    String patientId = tokens[0];
+                    String accessionNumber = tokens[1];
+                    map.put(accessionNumber, patientId);
+                }
+            });
+        }
+        if (map.isEmpty()) {
+            throw new Exception("Failed to parse patient id mapping file: " + file.getCanonicalPath() + ".");
+        }
+        return map;
     }
 
 }
