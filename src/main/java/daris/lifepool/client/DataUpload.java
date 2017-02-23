@@ -413,10 +413,14 @@ public class DataUpload {
         w.add("uid", seriesInstanceUID);
 
         String seriesNumber = Attribute.getSingleStringValueOrNull(attributeList, TagFromName.SeriesNumber);
-        w.add("id", seriesNumber);
+        if (seriesNumber != null) {
+            w.add("id", seriesNumber);
+        }
 
         String seriesDescription = Attribute.getSingleStringValueOrNull(attributeList, TagFromName.SeriesDescription);
-        w.add("description", seriesDescription == null ? seriesNumber : seriesDescription);
+        if (seriesDescription != null || seriesNumber != null) {
+            w.add("description", seriesDescription == null ? seriesNumber : seriesDescription);
+        }
 
         String seriesDate = Attribute.getSingleStringValueOrNull(attributeList, TagFromName.SeriesDate);
         String seriesTime = Attribute.getSingleStringValueOrNull(attributeList, TagFromName.SeriesTime);
