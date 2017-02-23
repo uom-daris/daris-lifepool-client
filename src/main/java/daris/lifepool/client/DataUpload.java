@@ -20,7 +20,6 @@ import java.util.stream.Stream;
 
 import com.pixelmed.dicom.Attribute;
 import com.pixelmed.dicom.AttributeList;
-import com.pixelmed.dicom.AttributeTag;
 import com.pixelmed.dicom.DicomFileUtilities;
 import com.pixelmed.dicom.TagFromName;
 
@@ -174,7 +173,7 @@ public class DataUpload {
                 throw new Exception("You need to specify one of mf.auth, mf.token or mf.sid. Found none.");
             }
             System.out
-                    .print("loading accession.number->patient.id mapping file: " + patientIdMapFile.getCanonicalPath());
+                    .print("loading accession.number->patient.id mapping file: " + patientIdMapFile.getCanonicalPath() + "...");
             Map<String, String> patientIdMap = loadPatientIdMap(patientIdMapFile);
             System.out.println("done.");
             RemoteServer server = new RemoteServer(mfHost, mfPort, useHttp, encrypt);
@@ -270,6 +269,16 @@ public class DataUpload {
         }
 
         /*
+         * SeriesNumber: series number
+         *
+         * set SeriesNumber to 1 if it is null, because Mediaflux DICOM engine
+         * requires it.
+         */
+        String seriesNumber = Attribute.getSingleStringValueOrNull(attributeList, TagFromName.SeriesNumber);
+        if (seriesNumber == null) {
+            DicomModify.putAttribute(attributeList, TagFromName.SeriesNumber, "1");
+        }
+        /*
          * SOPInstanceUID: unique identifier for the instance/image
          */
         String sopInstanceUID = Attribute.getSingleStringValueOrNull(attributeList, TagFromName.SOPInstanceUID);
@@ -296,18 +305,16 @@ public class DataUpload {
         }
         File modifiedDicomFile = File.createTempFile(prefix, ".dcm");
 
-        Map<AttributeTag, String> attributeValues = new HashMap<AttributeTag, String>(1);
-        attributeValues.put(TagFromName.PatientName, projectCid);
+        DicomModify.putAttribute(attributeList, TagFromName.PatientName, projectCid);
 
         String patientId = patientIdMap.get(accessionNumber);
         if (patientId == null) {
             throw new Exception("Could not find PatientID in mapping file for AccessionNumber: " + accessionNumber);
         }
-
-        attributeValues.put(TagFromName.PatientID, patientId);
+        DicomModify.putAttribute(attributeList, TagFromName.PatientID, patientId);
 
         try {
-            DicomModify.modify(dicomFile, attributeValues, modifiedDicomFile);
+            DicomModify.save(attributeList, modifiedDicomFile);
 
             /*
              * find first dataset in the study
