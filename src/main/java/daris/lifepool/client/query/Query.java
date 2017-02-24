@@ -3,7 +3,8 @@ package daris.lifepool.client.query;
 import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.SortedSet;
+import java.util.Set;
+import java.util.TreeSet;
 
 import com.pixelmed.dicom.AttributeTag;
 
@@ -13,6 +14,7 @@ import arc.xml.XmlStringWriter;
 public class Query {
 
     private LinkedHashMap<AttributeTag, QueryElement> _elements;
+    private boolean _excludeNullElement = true;
 
     Query(List<QueryElement> elements) {
         _elements = new LinkedHashMap<AttributeTag, QueryElement>();
@@ -61,9 +63,17 @@ public class Query {
                 } else {
                     sb.append(" ").append(LogicOperator.AND).append(" ");
                 }
-                element.save(sb);
+                element.save(sb, _excludeNullElement);
             }
         }
+    }
+
+    public boolean excludeNullElement() {
+        return _excludeNullElement;
+    }
+
+    public void setExcludeNullElement(boolean excludeNullElement) {
+        _excludeNullElement = excludeNullElement;
     }
 
     @Override
@@ -73,7 +83,7 @@ public class Query {
         return sb.toString();
     }
 
-    public void execute(ServerClient.Connection cxn, String pid, SortedSet<String> resultAssetIds) throws Throwable {
+    public void execute(ServerClient.Connection cxn, String pid, Set<String> resultAssetIds) throws Throwable {
         StringBuilder sb = new StringBuilder();
         sb.append("(cid starts with '").append(pid).append("') and (");
         sb.append(toString()).append(")");
@@ -85,6 +95,48 @@ public class Query {
         if (ids != null && !ids.isEmpty()) {
             resultAssetIds.addAll(ids);
         }
+    }
+
+    /**
+     * Executes the queries and the result is a query string that includes all
+     * the result asset ids. e.g. "id=1 or id=2 or id=5"
+     * 
+     * @param cxn
+     * @param pid
+     * @param queries
+     * @return
+     * @throws Throwable
+     */
+    public static String execute(ServerClient.Connection cxn, String pid, List<Query> queries) throws Throwable {
+        Set<String> resultAssetIds = execute(pid, queries, cxn);
+        StringBuilder sb = new StringBuilder();
+        boolean first = true;
+        for (String id : resultAssetIds) {
+            if (first) {
+                first = false;
+            } else {
+                sb.append(" or ");
+            }
+            sb.append("id=").append(id);
+        }
+        return sb.toString();
+    }
+
+    /**
+     * Executes the queries and returns a set of result asset ids.
+     * 
+     * @param pid
+     * @param queries
+     * @param cxn
+     * @return
+     * @throws Throwable
+     */
+    public static Set<String> execute(String pid, List<Query> queries, ServerClient.Connection cxn) throws Throwable {
+        Set<String> resultAssetIds = new TreeSet<String>();
+        for (Query query : queries) {
+            query.execute(cxn, pid, resultAssetIds);
+        }
+        return resultAssetIds;
     }
 
 }

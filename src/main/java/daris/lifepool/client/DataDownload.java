@@ -2,23 +2,28 @@ package daris.lifepool.client;
 
 import java.io.File;
 import java.io.FileNotFoundException;
-import java.io.IOException;
-import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
-import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.nio.file.SimpleFileVisitor;
-import java.nio.file.attribute.BasicFileAttributes;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.List;
 
+import arc.archive.ArchiveInput;
+import arc.archive.ArchiveRegistry;
 import arc.mf.client.RemoteServer;
 import arc.mf.client.ServerClient;
+import arc.mf.client.archive.Archive;
+import arc.mime.NamedMimeType;
+import arc.streams.LongInputStream;
+import arc.streams.StreamCopy;
+import arc.xml.XmlDoc.Element;
+import arc.xml.XmlStringWriter;
 import daris.lifepool.client.query.Query;
 import daris.lifepool.client.query.QueryManifestParser;
 
 public class DataDownload {
+
+    public static String LAYOUT_PATTERN = "xpath(daris:dicom-dataset/object/de[@tag='00080050']/value)";
 
     public static void main(String[] args) throws Throwable {
         if (args == null || args.length == 0) {
@@ -35,6 +40,7 @@ public class DataDownload {
         String mfSid = null;
         String pid = null;
         File manifestFile = null;
+        Boolean includeNull = null;
         Boolean extract = null;
         File outputDir = null;
         File outputZipFile = null;
@@ -126,6 +132,12 @@ public class DataDownload {
                         throw new FileNotFoundException("File " + args[i + 1] + " is not found.");
                     }
                     i += 2;
+                } else if (args[i].equals("--include-null")) {
+                    if (includeNull != null) {
+                        throw new Exception("--include-null has been specified more than once.");
+                    }
+                    includeNull = true;
+                    i++;
                 } else if (args[i].equals("--extract")) {
                     if (extract != null) {
                         throw new Exception("--extract has been specified more than once.");
@@ -149,6 +161,9 @@ public class DataDownload {
             if (outputDir == null) {
                 outputDir = Paths.get(System.getProperty("user.dir")).toFile();
             }
+            if (includeNull == null) {
+                includeNull = false;
+            }
             if (extract == null) {
                 extract = false;
             }
@@ -170,12 +185,11 @@ public class DataDownload {
             if (mfAuth == null && mfSid == null && mfToken == null) {
                 throw new Exception("You need to specify one of mf.auth, mf.token or mf.sid. Found none.");
             }
-            
-            System.out.print("parsing manifest file: " + manifestFile.getCanonicalPath()
-                    + "...");
-            List<Query> queries = QueryManifestParser.parse(manifestFile);
+
+            System.out.print("parsing manifest file: " + manifestFile.getCanonicalPath() + "...");
+            List<Query> queries = QueryManifestParser.parse(manifestFile, !includeNull);
             System.out.println("done.");
-            
+
             RemoteServer server = new RemoteServer(mfHost, mfPort, useHttp, encrypt);
             final ServerClient.Connection cxn = server.open();
             try {
@@ -191,8 +205,9 @@ public class DataDownload {
                 } else {
                     cxn.reconnect(mfSid);
                 }
-                
-
+                System.out.print("executing queries and downloading results...");
+                download(cxn, pid, queries, extract ? outputDir : outputZipFile);
+                System.out.println("done.");
             } finally {
                 cxn.closeAndDiscard();
             }
@@ -200,6 +215,54 @@ public class DataDownload {
             System.err.println("Error: " + ex.getMessage());
             showHelp();
         }
+    }
+
+    public static void download(ServerClient.Connection cxn, String pid, List<Query> queries, File out)
+            throws Throwable {
+        XmlStringWriter w = new XmlStringWriter();
+        w.add("where", Query.execute(cxn, pid, queries));
+        w.add("cid", pid);
+        w.add("format", out.isDirectory() ? "aar" : "zip");
+        w.add("parts", "content");
+        w.add("include-attachments", false);
+        w.add("decompress", true);
+        w.add("layout-pattern", new String[] { "type", "dataset" }, DataDownload.LAYOUT_PATTERN);
+        if (out.isDirectory()) {
+            if (!Files.exists(out.toPath())) {
+                Files.createDirectories(out.toPath());
+            }
+            cxn.execute("daris.collection.archive.create", w.document(), null, new ServerClient.OutputConsumer() {
+
+                @Override
+                protected void consume(Element re, LongInputStream in) throws Throwable {
+                    Archive.declareSupportForAllTypes();
+                    ArchiveInput ai = ArchiveRegistry.createInput(in, new NamedMimeType("application/arc-archive"));
+                    ArchiveInput.Entry e;
+                    try {
+                        while ((e = ai.next()) != null) {
+                            try {
+                                if (e.isDirectory()) {
+                                    new File(out, e.name()).mkdirs();
+                                } else {
+                                    StreamCopy.copy(e.stream(), new File(out, e.name()));
+                                }
+                            } finally {
+                                ai.closeEntry();
+                            }
+                        }
+                    } finally {
+                        try {
+                            ai.close();
+                        } finally {
+                            in.close();
+                        }
+                    }
+                }
+            });
+        } else {
+            cxn.execute("daris.collection.archive.create", w.document(), null, new ServerClient.FileOutput(out));
+        }
+
     }
 
     private static String outputZipFileNameFor(String manifestFileName) {
@@ -239,6 +302,8 @@ public class DataDownload {
         System.out.println("    --pid <project-cid>                  The DaRIS project cid.");
         System.out.println(
                 "    --manifest <query-manifest-file>     The query manifest file in CSV format. Specification of the format see https://docs.google.com/document/d/1skiNkR8lxx_cW9pCW2OEsZn30wYrkLr8n4LR1OgUmMU");
+        System.out.println(
+                "    --include-null                       If specified, include the asset/image, if a DICOM element is not specified in the manifest, and the element of the asset/image has no value.");
         System.out.println(
                 "    --extract                            Extract the downloaded archive. If not specified, the downloaded data will be save to a zip archive.");
         System.out.println("    --help                               Display help information.");

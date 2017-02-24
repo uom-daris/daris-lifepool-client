@@ -20,11 +20,18 @@ import com.pixelmed.dicom.TagFromName;
 
 public class QueryManifestParser {
 
-    public static List<Query> parse(File manifestFile) throws Throwable {
+    public static List<Query> parse(File manifestFile, boolean excludeNullElement) throws Throwable {
         List<Query> queries = new ArrayList<Query>();
         try (Stream<String> stream = Files.lines(manifestFile.toPath())) {
             stream.forEach(row -> {
-                // queries.add(parseRow(row));
+                if (row.matches("^\\ *\\d+[A-Z]+\\d+\\ *,\\ *.+")) {
+                    try {
+                        queries.add(parseRow(row, excludeNullElement));
+                    } catch (Throwable e) {
+                        System.err.println("Failed to parse row: " + row);
+                        e.printStackTrace(System.err);
+                    }
+                }
             });
         }
         if (!queries.isEmpty()) {
@@ -34,14 +41,15 @@ public class QueryManifestParser {
         }
     }
 
-    static Query parseRow(String row) throws Throwable {
+    static Query parseRow(String row, boolean excludeNullElement) throws Throwable {
 
         Query query = new Query();
+        query.setExcludeNullElement(excludeNullElement);
 
         /*
          * column 1: AccessionNumber
          */
-        Pattern pattern = Pattern.compile("^\\ *[0-9A-Z]+,");
+        Pattern pattern = Pattern.compile("^\\ *\\d+[A-Z]+\\d+\\ *,");
         Matcher matcher = pattern.matcher(row);
         if (!matcher.find()) {
             throw new Exception("Failed to parse row: " + row);
@@ -270,7 +278,7 @@ public class QueryManifestParser {
     static QueryElement parseCell(AttributeTag tag, String specs) throws Throwable {
 
         if (specs == null || specs.trim().isEmpty()) {
-            return null;
+            return new QueryElement(tag);
         }
         List<Predicate> predicates = new ArrayList<Predicate>();
         Pattern pattern = Pattern.compile("\\ *(={1,2}|!=){0,1}\\ *'[^']+'\\ *");
