@@ -152,6 +152,19 @@ public class DataDownload {
                     i++;
                 }
             }
+
+            if (mfHost == null) {
+                throw new Exception("--mf.host is not specified.");
+            }
+            if (mfPort <= 0) {
+                throw new Exception("--mf.port is not specified.");
+            }
+            if (mfTransport == null) {
+                throw new Exception("--mf.transport is not specified.");
+            }
+            if (mfAuth == null && mfSid == null && mfToken == null) {
+                throw new Exception("You need to specify one of mf.auth, mf.token or mf.sid. Found none.");
+            }
             if (pid == null) {
                 throw new Exception("--pid is not specified.");
             }
@@ -173,19 +186,6 @@ public class DataDownload {
                     throw new Exception("Output file: \"" + outputZipFile.getCanonicalPath() + "\" already exists.");
                 }
             }
-            if (mfHost == null) {
-                throw new Exception("--mf.host is not specified.");
-            }
-            if (mfPort <= 0) {
-                throw new Exception("--mf.port is not specified.");
-            }
-            if (mfTransport == null) {
-                throw new Exception("--mf.transport is not specified.");
-            }
-            if (mfAuth == null && mfSid == null && mfToken == null) {
-                throw new Exception("You need to specify one of mf.auth, mf.token or mf.sid. Found none.");
-            }
-
             System.out.print("parsing manifest file: " + manifestFile.getCanonicalPath() + "...");
             List<Query> queries = QueryManifestParser.parse(manifestFile, !includeNull);
             System.out.println("done.");

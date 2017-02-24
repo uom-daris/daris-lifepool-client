@@ -2,15 +2,24 @@ package daris.lifepool.client;
 
 import java.io.File;
 import java.io.FileNotFoundException;
+import java.text.SimpleDateFormat;
+import java.util.Date;
 import java.util.List;
 
 import arc.mf.client.RemoteServer;
 import arc.mf.client.ServerClient;
+import arc.xml.XmlDoc;
 import arc.xml.XmlStringWriter;
 import daris.lifepool.client.query.Query;
 import daris.lifepool.client.query.QueryManifestParser;
 
 public class DataShare {
+
+    public static final int DEFAULT_EXPIRE_DAYS = 14;
+
+    public static final String TOKEN_TAG = "daris-lifepool-manifest-url";
+
+    public static final long MILLISECS_PER_DAY = 24L * 60L * 60L * 1000L;
 
     public static void main(String[] args) throws Throwable {
         if (args == null || args.length == 0) {
@@ -28,6 +37,7 @@ public class DataShare {
         String pid = null;
         File manifestFile = null;
         Boolean includeNull = null;
+        Integer expire = null;
         try {
             for (int i = 0; i < args.length;) {
                 if (args[i].equals("--help") || args[i].equals("-h")) {
@@ -122,16 +132,17 @@ public class DataShare {
                     }
                     includeNull = true;
                     i++;
+                } else if (args[i].equals("--expire")) {
+                    if (expire != null) {
+                        throw new Exception("--expire has already been specified.");
+                    }
+                    expire = Integer.parseInt(args[i + 1]);
+                    i += 2;
                 } else {
                     throw new IllegalArgumentException("Unexpected argument: " + args[i]);
                 }
             }
-            if (pid == null) {
-                throw new Exception("--pid is not specified.");
-            }
-            if (manifestFile == null) {
-                throw new Exception("--manifest is not specified.");
-            }
+
             if (mfHost == null) {
                 throw new Exception("--mf.host is not specified.");
             }
@@ -144,8 +155,17 @@ public class DataShare {
             if (mfAuth == null && mfSid == null && mfToken == null) {
                 throw new Exception("You need to specify one of mf.auth, mf.token or mf.sid. Found none.");
             }
+            if (pid == null) {
+                throw new Exception("--pid is not specified.");
+            }
+            if (manifestFile == null) {
+                throw new Exception("--manifest is not specified.");
+            }
             if (includeNull == null) {
                 includeNull = false;
+            }
+            if (expire == null) {
+                expire = DEFAULT_EXPIRE_DAYS;
             }
 
             System.out.print("parsing manifest file: " + manifestFile.getCanonicalPath() + "...");
@@ -167,7 +187,14 @@ public class DataShare {
                 } else {
                     cxn.reconnect(mfSid);
                 }
-                String url = generateUrl(cxn, pid, queries);
+                /*
+                 * create secure identity token
+                 */
+                String token = createSecureIdentityToken(cxn, pid, queries, expire);
+                /*
+                 * generate url
+                 */
+                String url = urlForToken(token, mfHost, mfPort, useHttp && encrypt, pid);
                 System.out.println(url);
             } finally {
                 cxn.closeAndDiscard();
@@ -178,8 +205,23 @@ public class DataShare {
         }
     }
 
-    public static String generateUrl(ServerClient.Connection cxn, String pid, List<Query> queries) throws Throwable {
+    private static String createSecureIdentityToken(ServerClient.Connection cxn, String pid, List<Query> queries,
+            int expireDays) throws Throwable {
         XmlStringWriter w = new XmlStringWriter();
+
+        w.add("role", new String[] { "type", "role" }, "daris:pssd.model.user");
+        w.add("role", new String[] { "type", "role" }, "daris:pssd.subject.create");
+        w.add("role", new String[] { "type", "role" }, "vicnode.daris:pssd.model.user");
+        w.add("role", new String[] { "type", "role" }, "daris:pssd.project.guest." + pid);
+        w.add("role", new String[] { "type", "role" }, "user");
+        w.add("grant-caller-transient-roles", false);
+        w.add("max-token-length", 20);
+        w.add("min-token-length", 20);
+        w.add("tag", TOKEN_TAG);
+        Date expireDate = new Date(new Date().getTime() + (MILLISECS_PER_DAY * expireDays));
+        w.add("to", expireDate);
+
+        w.push("service", new String[] { "name", "daris.collection.archive.create" });
         w.add("where", Query.execute(cxn, pid, queries));
         w.add("cid", pid);
         w.add("format", "zip");
@@ -187,9 +229,23 @@ public class DataShare {
         w.add("include-attachments", false);
         w.add("decompress", true);
         w.add("layout-pattern", new String[] { "type", "dataset" }, DataDownload.LAYOUT_PATTERN);
+        w.pop();
 
-        // TODO
-        return null;
+        XmlDoc.Element re = cxn.execute("secure.identity.token.create", w.document());
+        return re.value("token");
+    }
+
+    private static String urlForToken(String token, String host, int port, boolean https, String pid) {
+        StringBuilder sb = new StringBuilder();
+        sb.append(https ? "https" : "http").append("://");
+        sb.append(host);
+        if ((https && port != 443) || (!https && port != 80)) {
+            sb.append(":").append(port);
+        }
+        sb.append("/mflux/execute.mfjp?token=").append(token);
+        sb.append("&filename=").append("lifepool-").append(pid).append("-")
+                .append(new SimpleDateFormat("yyyyMMddHHmmss").format(new Date())).append(".zip");
+        return sb.toString();
     }
 
     private static void showHelp() {
@@ -208,6 +264,8 @@ public class DataShare {
                 "    --manifest <query-manifest-file>     The query manifest file in CSV format. Specification of the format see https://docs.google.com/document/d/1skiNkR8lxx_cW9pCW2OEsZn30wYrkLr8n4LR1OgUmMU");
         System.out.println(
                 "    --include-null                       If specified, include the asset/image, if a DICOM element is not specified in the manifest, and the element of the asset/image has no value.");
+        System.out.println(
+                "    --expire <number-of-days>            The generated url expires after specified number of days. Defaults to 14.");
         System.out.println("    --help                               Display help information.");
     }
 
