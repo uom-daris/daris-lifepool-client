@@ -11,6 +11,12 @@ public class QueryElement {
     private AttributeTag _tag;
     private List<Predicate> _predicates;
 
+    QueryElement(AttributeTag tag, List<Predicate> predicates) {
+
+        _tag = tag;
+        _predicates = new ArrayList<Predicate>(predicates);
+    }
+
     QueryElement(AttributeTag tag, Predicate... predicates) {
 
         _tag = tag;
@@ -29,13 +35,18 @@ public class QueryElement {
     }
 
     public void save(StringBuilder sb) {
-        sb.append("(");
+
         int nbPredicates = _predicates.size();
+        if (nbPredicates > 1) {
+            sb.append("(");
+        }
         for (int i = 0; i < nbPredicates; i++) {
             Predicate predicate = _predicates.get(i);
             predicate.save(_tag, sb);
         }
-        sb.append(")");
+        if (nbPredicates > 1) {
+            sb.append(")");
+        }
     }
 
     @Override

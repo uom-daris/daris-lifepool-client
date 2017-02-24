@@ -172,8 +172,8 @@ public class DataUpload {
             if (mfAuth == null && mfSid == null && mfToken == null) {
                 throw new Exception("You need to specify one of mf.auth, mf.token or mf.sid. Found none.");
             }
-            System.out
-                    .print("loading accession.number->patient.id mapping file: " + patientIdMapFile.getCanonicalPath() + "...");
+            System.out.print("loading accession.number->patient.id mapping file: " + patientIdMapFile.getCanonicalPath()
+                    + "...");
             Map<String, String> patientIdMap = loadPatientIdMap(patientIdMapFile);
             System.out.println("done.");
             RemoteServer server = new RemoteServer(mfHost, mfPort, useHttp, encrypt);
@@ -193,7 +193,7 @@ public class DataUpload {
                 }
                 final String projectCid = pid;
                 for (File input : inputs) {
-                    if (input.isDirectory()) {
+                    if (Files.isDirectory(input.toPath())) {
                         Files.walkFileTree(input.toPath(), new SimpleFileVisitor<Path>() {
                             @Override
                             public FileVisitResult visitFile(Path path, BasicFileAttributes attrs) throws IOException {
@@ -278,6 +278,7 @@ public class DataUpload {
         if (seriesNumber == null) {
             DicomModify.putAttribute(attributeList, TagFromName.SeriesNumber, "1");
         }
+
         /*
          * SOPInstanceUID: unique identifier for the instance/image
          */
@@ -452,7 +453,9 @@ public class DataUpload {
         w.add("modality", modality);
 
         String protocolName = Attribute.getSingleStringValueOrNull(attributeList, TagFromName.ProtocolName);
-        w.add("protocol", protocolName);
+        if (protocolName != null) {
+            w.add("protocol", protocolName);
+        }
 
         double[] imagePosition = Attribute.getDoubleValues(attributeList, TagFromName.ImagePositionPatient);
         double[] imageOrientation = Attribute.getDoubleValues(attributeList, TagFromName.ImageOrientationPatient);
