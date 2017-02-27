@@ -201,6 +201,7 @@ public class DataUpload {
                                     uploadDicomFile(cxn, path.toFile(), projectCid, patientIdMap);
                                 } catch (Throwable e) {
                                     e.printStackTrace(System.err);
+                                    return FileVisitResult.SKIP_SIBLINGS;
                                 }
                                 return FileVisitResult.CONTINUE;
                             }
@@ -339,9 +340,26 @@ public class DataUpload {
                 System.out.println("done.");
 
                 // destory the newly ingested first dataset (then re-create
-                // it
-                // using om.pssd.dataset.derivation.create)
-                cxn.execute("asset.unlock", "<id>" + firstDatasetAssetId + "</id>");
+                // it using om.pssd.dataset.derivation.create)
+
+                // run dicom.metadata.get to test
+                try {
+                    cxn.execute("dicom.metadata.get", "<id>" + firstDatasetAssetId + "</id>");
+                } catch (Throwable e) {
+                    System.err.println("Error: failed to run dicom.metadata.get on newly ingested dataset: "
+                            + firstDatasetCid + " (AccessionNumber: " + accessionNumber + ", source file: "
+                            + dicomFile.getCanonicalPath()
+                            + "). You may need to destroy it, fix the dicom file, and re-upload.");
+                    throw e;
+                }
+
+                // check if it's locked.
+                if (cxn.execute("asset.unlock.describe", "<id>" + firstDatasetAssetId + "</id>")
+                        .elementExists("lock")) {
+                    throw new Exception("DICOM dataset " + firstDatasetCid + " (asset_id=" + firstDatasetAssetId
+                            + ") is locked by DICOM server engine. Something not right.");
+                }
+
                 cxn.execute("om.pssd.object.destroy",
                         "<hard-destroy>true</hard-destroy><cid>" + firstDatasetCid + "</cid>");
             }
