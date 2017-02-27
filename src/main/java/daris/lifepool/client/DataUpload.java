@@ -354,7 +354,7 @@ public class DataUpload {
                 }
 
                 // check if it's locked.
-                if (cxn.execute("asset.unlock.describe", "<id>" + firstDatasetAssetId + "</id>")
+                if (cxn.execute("asset.lock.describe", "<id>" + firstDatasetAssetId + "</id>")
                         .elementExists("lock")) {
                     throw new Exception("DICOM dataset " + firstDatasetCid + " (asset_id=" + firstDatasetAssetId
                             + ") is locked by DICOM server engine. Something not right.");
