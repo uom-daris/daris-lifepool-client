@@ -327,6 +327,7 @@ public class DataUpload {
                  */
                 System.out.print("ingesting study...");
                 firstDatasetAE = DicomIngest.ingest(cxn, modifiedDicomFile, projectCid);
+                String firstDatasetAssetId = firstDatasetAE.value("@id");
                 String firstDatasetCid = firstDatasetAE.value("cid");
 
                 // update study name & description
@@ -340,6 +341,7 @@ public class DataUpload {
                 // destory the newly ingested first dataset (then re-create
                 // it
                 // using om.pssd.dataset.derivation.create)
+                cxn.execute("asset.unlock", "<id>" + firstDatasetAssetId + "</id>");
                 cxn.execute("om.pssd.object.destroy",
                         "<hard-destroy>true</hard-destroy><cid>" + firstDatasetCid + "</cid>");
             }
