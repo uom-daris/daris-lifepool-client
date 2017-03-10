@@ -120,8 +120,7 @@ public class DicomIngest {
         }
     }
 
-    public static XmlDoc.Element ingest(ServerClient.Connection cxn, File dicomFile, String projectCid)
-            throws Throwable {
+    public static String ingest(ServerClient.Connection cxn, File dicomFile, String projectCid) throws Throwable {
         Settings settings = new Settings();
         settings.setEngine("nig.dicom");
         settings.setAnonymize(true);
@@ -138,18 +137,13 @@ public class DicomIngest {
         return ingest(cxn, dicomFile, settings);
     }
 
-    public static XmlDoc.Element ingest(ServerClient.Connection cxn, File dicomFile, Settings settings)
-            throws Throwable {
+    public static String ingest(ServerClient.Connection cxn, File dicomFile, Settings settings) throws Throwable {
         List<File> dicomFiles = new ArrayList<File>(1);
         dicomFiles.add(dicomFile);
         XmlDoc.Element re = ingest(cxn, dicomFiles, settings);
         String studyAssetId = re.value("study/@id");
         String studyCid = cxn.execute("asset.identifier.get", "<id>" + studyAssetId + "</id>").value("id/@cid");
-        XmlDoc.Element datasetAE = cxn
-                .execute("asset.query",
-                        "<action>get-meta</action><size>1</size><where>cid in '" + studyCid + "'</where>")
-                .element("asset");
-        return datasetAE;
+        return studyCid;
     }
 
     public static XmlDoc.Element ingest(ServerClient.Connection cxn, final List<File> dicomFiles,

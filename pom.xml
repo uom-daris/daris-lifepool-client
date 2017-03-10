@@ -5,7 +5,7 @@
 	<modelVersion>4.0.0</modelVersion>
 	<groupId>au.edu.unimelb.daris</groupId>
 	<artifactId>daris-lifepool-client</artifactId>
-	<version>0.0.4</version>
+	<version>0.0.6</version>
 	<name>daris-lifepool-client</name>
 	<description>DaRIS client for Lifepool Mammogram Projects</description>
 	<url>https://github.com/uom-daris/daris-lifepool-client</url>
