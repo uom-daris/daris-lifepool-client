@@ -12,6 +12,7 @@ import java.nio.file.SimpleFileVisitor;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
@@ -259,7 +260,7 @@ public class DataUpload {
         String accessionNumber = dicomFile.getParentFile().getName();
         String accessionNumberInDicomFile = Attribute.getSingleStringValueOrNull(attributeList,
                 TagFromName.AccessionNumber);
-        if (accessionNumber.equals(accessionNumberInDicomFile)) {
+        if (!accessionNumber.equals(accessionNumberInDicomFile)) {
             System.out
                     .println("Warning: The AccessionNumber: " + accessionNumberInDicomFile + " in DICOM header of file:"
                             + dicomFile.getCanonicalPath() + " does not match parent directory name: " + accessionNumber
@@ -388,7 +389,13 @@ public class DataUpload {
         XmlDoc.Element re = cxn.execute("asset.query", w.document());
         int nbResults = re.count("cid");
         if (nbResults > 1 && exceptionIfMultipleFound) {
-            throw new Exception("More than one dicom dataset found. Expects only one. ");
+            StringBuilder sb1 = new StringBuilder();
+            Collection<String> cids = re.values("cid");
+            for (String cid : cids) {
+                sb.append(cid).append(" ");
+            }
+            throw new Exception("More than one dicom datasets: " + sb1.toString() + "are found with SOPInstanceUID="
+                    + sopInstanceUID + " and AccessionNumber=" + accessionNumber + ". Expects only one. ");
         }
         return re.value("cid");
     }
@@ -398,7 +405,8 @@ public class DataUpload {
 
         StringBuilder sb = new StringBuilder();
         sb.append("cid starts with '").append(projectCid).append("'");
-        sb.append(" and xpath(mf-dicom-series/uid)='").append(seriesInstanceUID).append("' and mf-note has value");
+        sb.append(" and xpath(mf-dicom-series/uid)='").append(seriesInstanceUID).append("'");
+        sb.append(" and mf-note has value");
 
         XmlStringWriter w = new XmlStringWriter();
         w.add("where", sb.toString());
@@ -468,7 +476,7 @@ public class DataUpload {
         w.add("processed", true);
         w.add("name", name);
         w.add("description", description);
-        w.add("fillin", true);
+//        w.add("fillin", false);
         w.push("meta");
 
         /*
