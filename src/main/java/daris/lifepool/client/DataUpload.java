@@ -351,7 +351,7 @@ public class DataUpload {
                 if (firstDatasetAE.elementExists("lock")) {
                     throw new Exception("The newly ingested dataset " + firstDatasetAE.value("cid") + " is locked.");
                 }
-                System.out.println("ingested dataset " + firstDatasetCid + " (and study " + studyCid + ").");
+                System.out.println("ingested dataset " + firstDatasetCid + " (in study " + studyCid + ").");
 
                 // update study name & description
                 System.out.print("updating study " + studyCid + "(accession.number=" + accessionNumber + ")...");
@@ -366,7 +366,9 @@ public class DataUpload {
                 /*
                  * create dataset
                  */
-                System.out.print("creating dataset from file: \"" + dicomFile.getCanonicalPath() + "\"...");
+                String studyCid = CiteableIdUtils.parent(firstDatasetAE.value("cid"));
+                System.out.print("creating dataset from file: \"" + dicomFile.getCanonicalPath() + "\" in study "
+                        + studyCid + "...");
                 datasetCid = createDicomDataset(cxn, firstDatasetAE, modifiedDicomFile, dicomFile.getCanonicalPath(),
                         attributeList);
                 System.out.println("created dataset " + datasetCid + ".");
@@ -480,7 +482,7 @@ public class DataUpload {
         w.add("processed", true);
         w.add("name", name);
         w.add("description", description);
-//        w.add("fillin", false);
+        // w.add("fillin", false);
         w.push("meta");
 
         /*
