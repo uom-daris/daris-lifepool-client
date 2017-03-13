@@ -268,7 +268,7 @@ public class DataUpload {
             DicomModify.putAttribute(attributeList, TagFromName.AccessionNumber, accessionNumber);
         }
         System.out.println();
-        System.out.println("### AccessionNumber(0008,0050): ");
+        System.out.println("### AccessionNumber(0008,0050): " + accessionNumber);
         System.out.println("### File: " + dicomFile.getCanonicalPath());
         System.out.println();
 
