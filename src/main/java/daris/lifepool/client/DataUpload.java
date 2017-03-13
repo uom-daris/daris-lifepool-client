@@ -480,8 +480,12 @@ public class DataUpload {
         w.add("type", "dicom/series");
         w.add("ctype", "application/arc-archive");
         w.add("processed", true);
-        w.add("name", name);
-        w.add("description", description);
+        if (name != null) {
+            w.add("name", name);
+        }
+        if (description != null) {
+            w.add("description", description);
+        }
         // w.add("fillin", false);
         w.push("meta");
 
