@@ -267,6 +267,10 @@ public class DataUpload {
                             + ". Set the value to " + accessionNumber + ".");
             DicomModify.putAttribute(attributeList, TagFromName.AccessionNumber, accessionNumber);
         }
+        System.out.println();
+        System.out.println("### AccessionNumber(0008,0050): ");
+        System.out.println("### File: " + dicomFile.getCanonicalPath());
+        System.out.println();
 
         /*
          * SeriesInstanceUID: unique identifier for the series
