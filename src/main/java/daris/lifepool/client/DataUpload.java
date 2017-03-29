@@ -312,6 +312,7 @@ public class DataUpload {
         /*
          * modify dicom file
          */
+        System.out.println("Modify temporary copy of Dicom file");
         String prefix = dicomFile.getName();
         if (prefix.endsWith(".dcm") || prefix.endsWith(".DCM")) {
             prefix = prefix.substring(0, prefix.length() - 4);
@@ -328,6 +329,7 @@ public class DataUpload {
 
         try {
             DicomModify.save(attributeList, modifiedDicomFile);
+            System.out.println("done.");
 
             /*
              * find first dataset in the study
