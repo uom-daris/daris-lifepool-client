@@ -2,12 +2,18 @@ package daris.lifepool.client.dicom;
 
 import java.io.File;
 import java.io.OutputStream;
+import java.io.PipedInputStream;
+import java.io.PipedOutputStream;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+
+import com.pixelmed.dicom.AttributeList;
+import com.pixelmed.dicom.TransferSyntax;
 
 import arc.archive.ArchiveOutput;
 import arc.archive.ArchiveRegistry;
@@ -120,6 +126,24 @@ public class DicomIngest {
         }
     }
 
+    public static String ingest(ServerClient.Connection cxn, AttributeList attributeList, String sourcePath,
+            String projectCid) throws Throwable {
+        Settings settings = new Settings();
+        settings.setEngine("nig.dicom");
+        settings.setAnonymize(true);
+        settings.setMimeTypeOfInputStream("application/arc-archive");
+        settings.setArg("nig.dicom.id.by",
+                "study.id,patient.name.first,patient.name,patient.id,referring.physician.name");
+        settings.setArg("nig.dicom.id.ignore-non-digits", "true");
+        settings.setArg("nig.dicom.subject.create", "true");
+        settings.setArg("nig.dicom.subject.find.method", "id");
+        settings.setArg("nig.dicom.subject.meta.set-service", "vicnode.daris.subject.meta.set");
+        settings.setArg("nig.dicom.subject.name.from.id", "true");
+        settings.setArg("nig.dicom.write.mf-dicom-patient", "true");
+        settings.setArg("nig.dicom.id.citable", projectCid);
+        return ingest(cxn, attributeList, sourcePath, settings);
+    }
+
     public static String ingest(ServerClient.Connection cxn, File dicomFile, String projectCid) throws Throwable {
         Settings settings = new Settings();
         settings.setEngine("nig.dicom");
@@ -173,6 +197,58 @@ public class DicomIngest {
             }
         };
         return cxn.execute("dicom.ingest", w.document(), sci);
+    }
+
+    public static String ingest(ServerClient.Connection cxn, final AttributeList attributeList, final String sourcePath,
+            final Settings settings) throws Throwable {
+
+        XmlStringWriter w = new XmlStringWriter();
+        settings.save(w);
+
+        Archive.declareSupportForAllTypes();
+        ServerClient.Input sci = new ServerClient.GeneratedInput("application/arc-archive", "aar", sourcePath, -1,
+                null) {
+
+            @Override
+            protected void copyTo(OutputStream os, AbortCheck ac) throws Throwable {
+                ArchiveOutput ao = ArchiveRegistry.createOutput(os, "application/arc-archive",
+                        settings.compressionLevel(), null);
+                PipedInputStream pis = new PipedInputStream();
+                PipedOutputStream pos = new PipedOutputStream(pis);
+                Throwable[] workerException = new Throwable[1];
+                Thread workerThread = new Thread(new Runnable() {
+                    @Override
+                    public void run() {
+                        try {
+                            try {
+                                attributeList.write(pos, TransferSyntax.ExplicitVRLittleEndian, true, true);
+                            } finally {
+                                pos.close();
+                            }
+                        } catch (Throwable e) {
+                            System.err.println("Error in worker thread: " + Thread.currentThread().getName());
+                            e.printStackTrace(System.err);
+                            workerException[0] = e;
+                        }
+                    }
+                }, "Writing DICOM to PipedOutputStream");
+                try {
+                    workerThread.start();
+                    ao.add("application/dicom", Paths.get(sourcePath).getFileName().toString(), pis, -1);
+                    workerThread.join();
+                    if (workerException[0] != null) {
+                        throw new Exception("Worker thread exception: " + workerException[0].getMessage(),
+                                workerException[0]);
+                    }
+                } finally {
+                    ao.close();
+                }
+            }
+        };
+        XmlDoc.Element re = cxn.execute("dicom.ingest", w.document(), sci);
+        String studyAssetId = re.value("study/@id");
+        String studyCid = cxn.execute("asset.identifier.get", "<id>" + studyAssetId + "</id>").value("id/@cid");
+        return studyCid;
     }
 
 }

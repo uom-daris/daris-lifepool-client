@@ -4,6 +4,8 @@ import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.io.PipedInputStream;
+import java.io.PipedOutputStream;
 import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -23,6 +25,7 @@ import com.pixelmed.dicom.Attribute;
 import com.pixelmed.dicom.AttributeList;
 import com.pixelmed.dicom.DicomFileUtilities;
 import com.pixelmed.dicom.TagFromName;
+import com.pixelmed.dicom.TransferSyntax;
 
 import arc.archive.ArchiveOutput;
 import arc.archive.ArchiveRegistry;
@@ -252,8 +255,12 @@ public class DataUpload {
         }
 
         AttributeList attributeList = new AttributeList();
-        attributeList.read(dicomFile);
 
+        System.out.println("###DEBUG:### begin reading source dicom file. " + new Date());
+        attributeList.read(dicomFile);
+        System.out.println("###DEBUG:###   end reading source dicom file. " + new Date());
+
+        System.out.println("###DEBUG:### begin editing in-memory dicom object. " + new Date());
         /*
          * AccessionNumber:
          */
@@ -316,7 +323,7 @@ public class DataUpload {
         if (prefix.endsWith(".dcm") || prefix.endsWith(".DCM")) {
             prefix = prefix.substring(0, prefix.length() - 4);
         }
-        File modifiedDicomFile = File.createTempFile(prefix, ".dcm");
+        // File modifiedDicomFile = File.createTempFile(prefix, ".dcm");
 
         DicomModify.putAttribute(attributeList, TagFromName.PatientName, projectCid);
 
@@ -326,55 +333,57 @@ public class DataUpload {
         }
         DicomModify.putAttribute(attributeList, TagFromName.PatientID, patientId);
 
-        try {
-            DicomModify.save(attributeList, modifiedDicomFile);
-
+        System.out.println("###DEBUG:###   end editing in-memory dicom object. " + new Date());
+        /*
+         * find first dataset in the study
+         */
+        XmlDoc.Element firstDatasetAE = getFirstDicomDataset(cxn, projectCid, seriesInstanceUID);
+        if (firstDatasetAE == null) {
             /*
-             * find first dataset in the study
+             * dicom ingest
              */
-            XmlDoc.Element firstDatasetAE = getFirstDicomDataset(cxn, projectCid, seriesInstanceUID);
+
+            System.out.println("###DEBUG:### begin ingesting dicom object. " + new Date());
+            System.out.print("ingesting data from file: \"" + dicomFile.getCanonicalPath() + "\"...");
+            String studyCid = DicomIngest.ingest(cxn, attributeList, dicomFile.getCanonicalPath(), projectCid);
+            firstDatasetAE = cxn.execute("asset.query", "<action>get-meta</action><size>1</size><where>cid in '"
+                    + studyCid + "' and mf-note hasno value</where>").element("asset");
+
             if (firstDatasetAE == null) {
-                /*
-                 * dicom ingest
-                 */
-                System.out.print("ingesting data from file: \"" + dicomFile.getCanonicalPath() + "\"...");
-                String studyCid = DicomIngest.ingest(cxn, modifiedDicomFile, projectCid);
-                firstDatasetAE = cxn.execute("asset.query", "<action>get-meta</action><size>1</size><where>cid in '"
-                        + studyCid + "' and mf-note hasno value</where>").element("asset");
-                if (firstDatasetAE == null) {
-                    throw new Exception("Failed to find the newly ingested DICOM dataset in study " + studyCid
-                            + ". (source \"file:" + dicomFile.getCanonicalPath() + "\")");
-                }
-
-                String firstDatasetCid = firstDatasetAE.value("cid");
-
-                if (firstDatasetAE.elementExists("lock")) {
-                    throw new Exception("The newly ingested dataset " + firstDatasetAE.value("cid") + " is locked.");
-                }
-                System.out.println("ingested dataset " + firstDatasetCid + " (in study " + studyCid + ").");
-
-                // update study name & description
-                System.out.print("updating study " + studyCid + "(accession.number=" + accessionNumber + ")...");
-                updateStudyName(cxn, studyCid, attributeList);
-                System.out.println("done.");
-
-                // update newly ingested dataset
-                System.out.print("updating dataset " + firstDatasetCid + "...");
-                updateDicomDataset(cxn, firstDatasetAE, dicomFile.getCanonicalPath(), attributeList);
-                System.out.println("done.");
-            } else {
-                /*
-                 * create dataset
-                 */
-                String studyCid = CiteableIdUtils.parent(firstDatasetAE.value("cid"));
-                System.out.print("creating dataset from file: \"" + dicomFile.getCanonicalPath() + "\" in study "
-                        + studyCid + "...");
-                datasetCid = createDicomDataset(cxn, firstDatasetAE, modifiedDicomFile, dicomFile.getCanonicalPath(),
-                        attributeList);
-                System.out.println("created dataset " + datasetCid + ".");
+                throw new Exception("Failed to find the newly ingested DICOM dataset in study " + studyCid
+                        + ". (source \"file:" + dicomFile.getCanonicalPath() + "\")");
             }
-        } finally {
-            Files.deleteIfExists(modifiedDicomFile.toPath());
+
+            String firstDatasetCid = firstDatasetAE.value("cid");
+
+            if (firstDatasetAE.elementExists("lock")) {
+                throw new Exception("The newly ingested dataset " + firstDatasetAE.value("cid") + " is locked.");
+            }
+            System.out.println("ingested dataset " + firstDatasetCid + " (in study " + studyCid + ").");
+            System.out.println("###DEBUG:###   end ingesting dicom object. " + new Date());
+
+            System.out.println("###DEBUG:### begin updating study & dataset metadata. " + new Date());
+            // update study name & description
+            System.out.print("updating study " + studyCid + "(accession.number=" + accessionNumber + ")...");
+            updateStudyName(cxn, studyCid, attributeList);
+            System.out.println("done.");
+
+            // update newly ingested dataset
+            System.out.print("updating dataset " + firstDatasetCid + "...");
+            updateDicomDataset(cxn, firstDatasetAE, dicomFile.getCanonicalPath(), attributeList);
+            System.out.println("done.");
+            System.out.println("###DEBUG:###   end updating study & dataset metadata. " + new Date());
+        } else {
+            /*
+             * create dataset
+             */
+            System.out.println("###DEBUG:### begin creating dicom dataset. " + new Date());
+            String studyCid = CiteableIdUtils.parent(firstDatasetAE.value("cid"));
+            System.out.print("creating dataset from file: \"" + dicomFile.getCanonicalPath() + "\" in study " + studyCid
+                    + "...");
+            datasetCid = createDicomDataset(cxn, firstDatasetAE, attributeList, dicomFile.getCanonicalPath());
+            System.out.println("created dataset " + datasetCid + ".");
+            System.out.println("###DEBUG:###   end creating dicom dataset. " + new Date());
         }
     }
 
@@ -462,8 +471,9 @@ public class DataUpload {
         populateAdditionalDicomMetadata(cxn, ae.value("cid"));
     }
 
-    private static String createDicomDataset(ServerClient.Connection cxn, XmlDoc.Element firstSiblingAE,
-            final File dicomFile, final String sourcePath, AttributeList attributeList) throws Throwable {
+    static String createDicomDataset(ServerClient.Connection cxn, XmlDoc.Element firstSiblingAE,
+            AttributeList attributeList, String sourcePath) throws Throwable {
+
         String firstDatasetCid = firstSiblingAE.value("cid");
         String studyCid = CiteableIdUtils.parent(firstDatasetCid);
         String exMethodCid = firstSiblingAE.value("meta/daris:pssd-derivation/method");
@@ -568,6 +578,7 @@ public class DataUpload {
 
         w.pop();
 
+        String[] datasetCid = new String[1];
         Archive.declareSupportForAllTypes();
         ServerClient.Input sci = new ServerClient.GeneratedInput("application/arc-archive", "aar", sourcePath, -1,
                 null) {
@@ -576,22 +587,48 @@ public class DataUpload {
             protected void copyTo(OutputStream os, AbortCheck ac) throws Throwable {
                 ArchiveOutput ao = ArchiveRegistry.createOutput(os, "application/arc-archive",
                         DicomIngest.Settings.DEFAULT_COMPRESSION_LEVEL, null);
+
+                PipedInputStream pis = new PipedInputStream();
+                PipedOutputStream pos = new PipedOutputStream(pis);
+                Throwable[] workerException = new Throwable[1];
+                Thread workerThread = new Thread(new Runnable() {
+                    @Override
+                    public void run() {
+                        try {
+                            try {
+                                attributeList.write(pos, TransferSyntax.ExplicitVRLittleEndian, true, true);
+                            } finally {
+                                pos.close();
+                            }
+                        } catch (Throwable e) {
+                            System.err.println("Error in worker thread: " + Thread.currentThread().getName());
+                            e.printStackTrace(System.err);
+                            workerException[0] = e;
+                        }
+                    }
+                }, "Writing DICOM to PipedOutputStream");
                 try {
-                    ao.add("application/dicom", Paths.get(sourcePath).getFileName().toString(), dicomFile);
+                    workerThread.start();
+                    ao.add("application/dicom", Paths.get(sourcePath).getFileName().toString(), pis, -1);
+                    workerThread.join();
+                    if (workerException[0] != null) {
+                        throw new Exception("Worker thread exception: " + workerException[0].getMessage(),
+                                workerException[0]);
+                    }
                 } finally {
                     ao.close();
                 }
-
             }
         };
-        String datasetCid = cxn.execute("om.pssd.dataset.derivation.create", w.document(), sci).value("id");
+        datasetCid[0] = cxn.execute("om.pssd.dataset.derivation.create", w.document(), sci).value("id");
 
         /*
          * daris:dicom-dataset
          */
-        populateAdditionalDicomMetadata(cxn, datasetCid);
+        populateAdditionalDicomMetadata(cxn, datasetCid[0]);
 
-        return datasetCid;
+        return datasetCid[0];
+
     }
 
     private static String datasetNameFor(AttributeList attributeList) {
