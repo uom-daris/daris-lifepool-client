@@ -334,23 +334,15 @@ public class DataUpload {
         }
         DicomModify.putAttribute(attributeList, TagFromName.PatientID, patientId);
 
-<<<<<<< HEAD
         System.out.println("###DEBUG:###   end editing in-memory dicom object. " + new Date());
         /*
          * find first dataset in the study
          */
         XmlDoc.Element firstDatasetAE = getFirstDicomDataset(cxn, projectCid, seriesInstanceUID);
         if (firstDatasetAE == null) {
-=======
-        try {
-            DicomModify.save(attributeList, modifiedDicomFile);
-            System.out.println("done.");
-
->>>>>>> 444000caaaa2d609ce7a598e3cf21df1134d4296
             /*
              * dicom ingest
              */
-
             System.out.println("###DEBUG:### begin ingesting dicom object. " + new Date());
             System.out.print("ingesting data from file: \"" + dicomFile.getCanonicalPath() + "\"...");
             String studyCid = DicomIngest.ingest(cxn, attributeList, dicomFile.getCanonicalPath(), projectCid);
