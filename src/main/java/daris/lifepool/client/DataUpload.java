@@ -319,6 +319,7 @@ public class DataUpload {
         /*
          * modify dicom file
          */
+        System.out.println("Modify temporary copy of Dicom file");
         String prefix = dicomFile.getName();
         if (prefix.endsWith(".dcm") || prefix.endsWith(".DCM")) {
             prefix = prefix.substring(0, prefix.length() - 4);
@@ -333,12 +334,19 @@ public class DataUpload {
         }
         DicomModify.putAttribute(attributeList, TagFromName.PatientID, patientId);
 
+<<<<<<< HEAD
         System.out.println("###DEBUG:###   end editing in-memory dicom object. " + new Date());
         /*
          * find first dataset in the study
          */
         XmlDoc.Element firstDatasetAE = getFirstDicomDataset(cxn, projectCid, seriesInstanceUID);
         if (firstDatasetAE == null) {
+=======
+        try {
+            DicomModify.save(attributeList, modifiedDicomFile);
+            System.out.println("done.");
+
+>>>>>>> 444000caaaa2d609ce7a598e3cf21df1134d4296
             /*
              * dicom ingest
              */
