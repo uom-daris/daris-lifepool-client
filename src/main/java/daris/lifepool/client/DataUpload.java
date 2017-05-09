@@ -58,6 +58,7 @@ public class DataUpload {
         String pid = null;
         File patientIdMapFile = null;
         List<File> inputs = new ArrayList<File>();
+        Boolean continueOnError = null;
         try {
             for (int i = 0; i < args.length;) {
                 if (args[i].equals("--help") || args[i].equals("-h")) {
@@ -146,6 +147,12 @@ public class DataUpload {
                         throw new FileNotFoundException("File " + args[i + 1] + " is not found.");
                     }
                     i += 2;
+                } else if (args[i].equals("--continue-on-error")) {
+                    if (continueOnError != null) {
+                        throw new Exception("--continue-on-error has already been specified.");
+                    }
+                    continueOnError = true;
+                    i++;
                 } else {
                     File input = new File(args[i]);
                     if (!input.exists()) {
@@ -176,6 +183,10 @@ public class DataUpload {
             if (mfAuth == null && mfSid == null && mfToken == null) {
                 throw new Exception("You need to specify one of mf.auth, mf.token or mf.sid. Found none.");
             }
+            if (continueOnError == null) {
+                continueOnError = false;
+            }
+            final boolean stopOnError = !continueOnError;
             System.out.print("loading accession.number->patient.id mapping file: " + patientIdMapFile.getCanonicalPath()
                     + "...");
             Map<String, String> patientIdMap = loadPatientIdMap(patientIdMapFile);
@@ -205,7 +216,11 @@ public class DataUpload {
                                     uploadDicomFile(cxn, path.toFile(), projectCid, patientIdMap);
                                 } catch (Throwable e) {
                                     e.printStackTrace(System.err);
-                                    return FileVisitResult.TERMINATE;
+                                    if (stopOnError) {
+                                        return FileVisitResult.TERMINATE;
+                                    } else {
+                                        return FileVisitResult.CONTINUE;
+                                    }
                                 }
                                 return FileVisitResult.CONTINUE;
                             }
@@ -213,11 +228,23 @@ public class DataUpload {
                             @Override
                             public FileVisitResult visitFileFailed(Path path, IOException ioe) {
                                 ioe.printStackTrace(System.err);
-                                return FileVisitResult.TERMINATE;
+                                if (stopOnError) {
+                                    return FileVisitResult.TERMINATE;
+                                } else {
+                                    return FileVisitResult.CONTINUE;
+                                }
                             }
                         });
                     } else {
-                        uploadDicomFile(cxn, input, projectCid, patientIdMap);
+                        try {
+                            uploadDicomFile(cxn, input, projectCid, patientIdMap);
+                        } catch (Throwable e) {
+                            if (stopOnError) {
+                                throw e;
+                            } else {
+                                e.printStackTrace(System.err);
+                            }
+                        }
                     }
                 }
             } finally {
@@ -231,7 +258,7 @@ public class DataUpload {
 
     private static void showHelp() {
         System.out.println(
-                "Usage: data-upload [--help] --mf.host <host> --mf.port <port> --mf.transport <transport> [--mf.sid <sid>|--mf.token <token>|--mf.auth <domain,user,password>] --pid <project-cid> <dicom-files/dicom-directories>");
+                "Usage: data-upload [--help] --mf.host <host> --mf.port <port> --mf.transport <transport> [--mf.sid <sid>|--mf.token <token>|--mf.auth <domain,user,password>] [--continue-on-error] --pid <project-cid> <dicom-files/dicom-directories>");
         System.out.println("Description:");
         System.out.println("    --mf.host <host>                     The Mediaflux server host.");
         System.out.println("    --mf.port <port>                     The Mediaflux server port.");
@@ -243,6 +270,8 @@ public class DataUpload {
         System.out.println("    --pid <project-cid>                  The DaRIS project cid.");
         System.out.println(
                 "    --patient.id.map <paitent-id-map>    The file contains AccessionNumber -> PatientID mapping.");
+        System.out.println(
+                "    --continue-on-error                  Continue to upload remaining input files when error occurs.");
         System.out.println("    --help                               Display help information.");
     }
 
