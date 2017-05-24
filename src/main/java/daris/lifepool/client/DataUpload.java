@@ -272,7 +272,7 @@ public class DataUpload {
 
     private static void showHelp() {
         System.out.println(
-                "Usage: data-upload [--help] --mf.host <host> --mf.port <port> --mf.transport <transport> [--mf.sid <sid>|--mf.token <token>|--mf.auth <domain,user,password>] [--continue-on-error] --pid <project-cid> <dicom-files/dicom-directories>");
+                "Usage: data-upload [--help] --mf.host <host> --mf.port <port> --mf.transport <transport> [--mf.sid <sid>|--mf.token <token>|--mf.auth <domain,user,password>] [--csum] [--continue-on-error] --pid <project-cid> <dicom-files/dicom-directories>");
         System.out.println("Description:");
         System.out.println("    --mf.host <host>                     The Mediaflux server host.");
         System.out.println("    --mf.port <port>                     The Mediaflux server port.");
