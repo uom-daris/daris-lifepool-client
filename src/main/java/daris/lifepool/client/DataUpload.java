@@ -13,6 +13,7 @@ import java.nio.file.Paths;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.text.SimpleDateFormat;
+import java.util.AbstractMap.SimpleEntry;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Date;
@@ -31,10 +32,12 @@ import arc.archive.ArchiveOutput;
 import arc.archive.ArchiveRegistry;
 import arc.mf.client.RemoteServer;
 import arc.mf.client.ServerClient;
+import arc.mf.client.ServerClient.Connection;
 import arc.mf.client.archive.Archive;
 import arc.streams.StreamCopy.AbortCheck;
 import arc.xml.XmlDoc;
 import arc.xml.XmlStringWriter;
+import daris.dicom.util.DicomChecksumUtils;
 import daris.lifepool.client.dicom.DicomIngest;
 import daris.lifepool.client.dicom.DicomModify;
 
@@ -59,6 +62,7 @@ public class DataUpload {
         File patientIdMapFile = null;
         List<File> inputs = new ArrayList<File>();
         Boolean continueOnError = null;
+        Boolean csumCheck = null;
         try {
             for (int i = 0; i < args.length;) {
                 if (args[i].equals("--help") || args[i].equals("-h")) {
@@ -153,6 +157,12 @@ public class DataUpload {
                     }
                     continueOnError = true;
                     i++;
+                } else if (args[i].equals("--csum")) {
+                    if (csumCheck != null) {
+                        throw new Exception("--csum has already been specified.");
+                    }
+                    csumCheck = true;
+                    i++;
                 } else {
                     File input = new File(args[i]);
                     if (!input.exists()) {
@@ -186,6 +196,9 @@ public class DataUpload {
             if (continueOnError == null) {
                 continueOnError = false;
             }
+            if (csumCheck == null) {
+                csumCheck = false;
+            }
             final boolean stopOnError = !continueOnError;
             System.out.print("loading accession.number->patient.id mapping file: " + patientIdMapFile.getCanonicalPath()
                     + "...");
@@ -207,13 +220,14 @@ public class DataUpload {
                     cxn.reconnect(mfSid);
                 }
                 final String projectCid = pid;
+                final boolean csum = csumCheck;
                 for (File input : inputs) {
                     if (Files.isDirectory(input.toPath())) {
                         Files.walkFileTree(input.toPath(), new SimpleFileVisitor<Path>() {
                             @Override
                             public FileVisitResult visitFile(Path path, BasicFileAttributes attrs) throws IOException {
                                 try {
-                                    uploadDicomFile(cxn, path.toFile(), projectCid, patientIdMap);
+                                    uploadDicomFile(cxn, path.toFile(), projectCid, patientIdMap, csum);
                                 } catch (Throwable e) {
                                     e.printStackTrace(System.err);
                                     if (stopOnError) {
@@ -237,7 +251,7 @@ public class DataUpload {
                         });
                     } else {
                         try {
-                            uploadDicomFile(cxn, input, projectCid, patientIdMap);
+                            uploadDicomFile(cxn, input, projectCid, patientIdMap, csum);
                         } catch (Throwable e) {
                             if (stopOnError) {
                                 throw e;
@@ -270,13 +284,14 @@ public class DataUpload {
         System.out.println("    --pid <project-cid>                  The DaRIS project cid.");
         System.out.println(
                 "    --patient.id.map <paitent-id-map>    The file contains AccessionNumber -> PatientID mapping.");
+        System.out.println("    --csum                               Generate and compare MD5 checksums of PixelData.");
         System.out.println(
                 "    --continue-on-error                  Continue to upload remaining input files when error occurs.");
         System.out.println("    --help                               Display help information.");
     }
 
     public static void uploadDicomFile(ServerClient.Connection cxn, File dicomFile, String projectCid,
-            Map<String, String> patientIdMap) throws Throwable {
+            Map<String, String> patientIdMap, boolean csumCheck) throws Throwable {
 
         if (!DicomFileUtilities.isDicomOrAcrNemaFile(dicomFile)) {
             System.out.println("\"" + dicomFile.getCanonicalPath() + "\" is not a dicom file.");
@@ -340,6 +355,17 @@ public class DataUpload {
          */
         String datasetCid = findDicomDataset(cxn, projectCid, sopInstanceUID, accessionNumber, true);
         if (datasetCid != null) {
+            if (csumCheck) {
+                SimpleEntry<String, Boolean> serverMD5Info = getPixelDataChecksum(cxn, datasetCid, true);
+                if (serverMD5Info != null) {
+                    String serverMD5 = serverMD5Info.getKey();
+                    boolean bigEndian = serverMD5Info.getValue();
+                    String localMD5 = DicomChecksumUtils.getPixelDataChecksum(attributeList, bigEndian, "md5");
+                    if (!localMD5.equalsIgnoreCase(serverMD5)) {
+                        throw new Exception("Local MD5 checksum of PixelData does not match with the server side.");
+                    }
+                }
+            }
             System.out.println("Dicom dataset " + datasetCid + " created from local file \""
                     + dicomFile.getCanonicalPath() + "\" already exists.");
             return;
@@ -399,7 +425,7 @@ public class DataUpload {
 
             // update newly ingested dataset
             System.out.print("updating dataset " + firstDatasetCid + "...");
-            updateDicomDataset(cxn, firstDatasetAE, dicomFile.getCanonicalPath(), attributeList);
+            updateDicomDataset(cxn, firstDatasetAE, dicomFile.getCanonicalPath(), attributeList, csumCheck);
             System.out.println("done.");
             System.out.println("###DEBUG:###   end updating study & dataset metadata. " + new Date());
         } else {
@@ -410,7 +436,8 @@ public class DataUpload {
             String studyCid = CiteableIdUtils.parent(firstDatasetAE.value("cid"));
             System.out.print("creating dataset from file: \"" + dicomFile.getCanonicalPath() + "\" in study " + studyCid
                     + "...");
-            datasetCid = createDicomDataset(cxn, firstDatasetAE, attributeList, dicomFile.getCanonicalPath());
+            datasetCid = createDicomDataset(cxn, firstDatasetAE, attributeList, dicomFile.getCanonicalPath(),
+                    csumCheck);
             System.out.println("created dataset " + datasetCid + ".");
             System.out.println("###DEBUG:###   end creating dicom dataset. " + new Date());
         }
@@ -460,7 +487,7 @@ public class DataUpload {
     }
 
     private static void updateDicomDataset(ServerClient.Connection cxn, XmlDoc.Element ae, String sourcePath,
-            AttributeList attributeList) throws Throwable {
+            AttributeList attributeList, boolean csumCheck) throws Throwable {
         String name = datasetNameFor(attributeList);
         String description = datasetDescriptionFor(attributeList);
 
@@ -497,11 +524,41 @@ public class DataUpload {
         /*
          * daris:dicom-dataset
          */
-        populateAdditionalDicomMetadata(cxn, ae.value("cid"));
+        String cid = ae.value("cid");
+        populateAdditionalDicomMetadata(cxn, cid);
+
+        if (csumCheck) {
+            generatePixelDataChecksum(cxn, cid);
+        }
+    }
+
+    private static XmlDoc.Element generatePixelDataChecksum(Connection cxn, String datasetCid) throws Throwable {
+        XmlStringWriter w = new XmlStringWriter();
+        w.add("cid", datasetCid);
+        w.add("type", "md5");
+        w.add("save", true);
+        return cxn.execute("daris.dicom.pixel-data.checksum.generate", w.document());
+    }
+
+    private static SimpleEntry<String, Boolean> getPixelDataChecksum(Connection cxn, String datasetCid,
+            boolean generate) throws Throwable {
+        XmlDoc.Element ae = cxn.execute("asset.get", "<cid>" + datasetCid + "</cid>", null, null).element("asset");
+        boolean bigEndian = ae.booleanValue("meta/daris:dicom-pixel-data-checksum/object/@big-endian", false);
+        String serverMD5 = ae.value("meta/daris:dicom-pixel-data-checksum/object/pixel-data/csum[@type='md5']");
+        if (serverMD5 == null) {
+            if (generate) {
+                XmlDoc.Element re = generatePixelDataChecksum(cxn, datasetCid);
+                bigEndian = re.booleanValue("object/@big-endian", false);
+                serverMD5 = re.value("object/pixel-data/csum[@type='md5']");
+            } else {
+                return null;
+            }
+        }
+        return new SimpleEntry<String, Boolean>(serverMD5, bigEndian);
     }
 
     static String createDicomDataset(ServerClient.Connection cxn, XmlDoc.Element firstSiblingAE,
-            AttributeList attributeList, String sourcePath) throws Throwable {
+            AttributeList attributeList, String sourcePath, boolean csumCheck) throws Throwable {
 
         String firstDatasetCid = firstSiblingAE.value("cid");
         String studyCid = CiteableIdUtils.parent(firstDatasetCid);
@@ -655,6 +712,10 @@ public class DataUpload {
          * daris:dicom-dataset
          */
         populateAdditionalDicomMetadata(cxn, datasetCid[0]);
+
+        if (csumCheck) {
+            generatePixelDataChecksum(cxn, datasetCid[0]);
+        }
 
         return datasetCid[0];
 
