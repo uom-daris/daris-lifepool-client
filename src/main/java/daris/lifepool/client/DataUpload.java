@@ -360,10 +360,18 @@ public class DataUpload {
                 if (serverMD5Info != null) {
                     String serverMD5 = serverMD5Info.getKey();
                     boolean bigEndian = serverMD5Info.getValue();
+                    System.out.println("MD5 checksum for PixelData of dataset " + datasetCid + ": " + serverMD5);
+                    System.out.println(
+                            "MD5 checksum for PixelData of file " + dicomFile.getCanonicalPath() + ": " + serverMD5);
                     String localMD5 = DicomChecksumUtils.getPixelDataChecksum(attributeList, bigEndian, "md5");
                     if (!localMD5.equalsIgnoreCase(serverMD5)) {
-                        throw new Exception("Local MD5 checksum of PixelData does not match with the server side.");
+                        throw new Exception("Local MD5 checksum (" + localMD5
+                                + ") of PixelData does not match with the server side (" + serverMD5 + ").");
+                    } else {
+                        System.out.println("MD5 checksums match.");
                     }
+                } else {
+                    System.out.println("Warning: Failed to retrieve/generate MD5 checksum for dataset " + datasetCid);
                 }
             }
             System.out.println("Dicom dataset " + datasetCid + " created from local file \""
