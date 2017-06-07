@@ -356,22 +356,42 @@ public class DataUpload {
         String datasetCid = findDicomDataset(cxn, projectCid, sopInstanceUID, accessionNumber, true);
         if (datasetCid != null) {
             if (csumCheck) {
-                SimpleEntry<String, Boolean> serverMD5Info = getPixelDataChecksum(cxn, datasetCid, true);
-                if (serverMD5Info != null) {
-                    String serverMD5 = serverMD5Info.getKey();
-                    boolean bigEndian = serverMD5Info.getValue();
-                    System.out.println("MD5 checksum for PixelData of dataset " + datasetCid + ": " + serverMD5);
-                    System.out.println(
-                            "MD5 checksum for PixelData of file " + dicomFile.getCanonicalPath() + ": " + serverMD5);
-                    String localMD5 = DicomChecksumUtils.getPixelDataChecksum(attributeList, bigEndian, "md5");
-                    if (!localMD5.equalsIgnoreCase(serverMD5)) {
-                        throw new Exception("Local MD5 checksum (" + localMD5
-                                + ") of PixelData does not match with the server side (" + serverMD5 + ").");
-                    } else {
-                        System.out.println("MD5 checksums match.");
-                    }
+                SimpleEntry<String, Boolean> serverMD5Info = null;
+                try {
+                    serverMD5Info = getPixelDataChecksum(cxn, datasetCid, true);
+                } catch (Throwable e) {
+                }
+                String serverMD5 = serverMD5Info == null ? null : serverMD5Info.getKey();
+                boolean bigEndian = serverMD5Info == null ? false : serverMD5Info.getValue();
+                String localMD5 = null;
+                try {
+                    localMD5 = DicomChecksumUtils.getPixelDataChecksum(attributeList, bigEndian, "md5");
+                } catch (Throwable e) {
+                }
+
+                if (serverMD5 == null) {
+                    System.out.println("Warning: No MD5 checksum was generated for dataset " + datasetCid);
                 } else {
-                    System.out.println("Warning: Failed to retrieve/generate MD5 checksum for dataset " + datasetCid);
+                    System.out.println("MD5: (" + serverMD5 + ") for dataset: " + datasetCid);
+                }
+
+                if (localMD5 == null) {
+                    System.out.println(
+                            "Warning: No MD5 checksum was generated for file: " + dicomFile.getCanonicalPath());
+                } else {
+                    System.out.println("MD5: (" + localMD5 + ") for file: " + dicomFile.getCanonicalPath());
+                }
+
+                if (serverMD5 != null && localMD5 != null && serverMD5.equalsIgnoreCase(localMD5)) {
+                    System.out
+                            .println("MD5 match: dataset " + datasetCid + " == file: " + dicomFile.getCanonicalPath());
+                } else if (serverMD5 == null && localMD5 == null) {
+                    System.out.println("Warning: No MD5 checksum can be generated on both server side dataset "
+                            + datasetCid + " and local file: " + dicomFile.getCanonicalPath()
+                            + ". The DICOM file may not contain PixelData.");
+                } else {
+                    throw new Exception("MD5 checksum of file: " + dicomFile.getCanonicalPath() + " (" + localMD5
+                            + ") of PixelData does not match with dataset " + datasetCid + " (" + serverMD5 + ").");
                 }
             }
             System.out.println("Dicom dataset " + datasetCid + " created from local file \""
