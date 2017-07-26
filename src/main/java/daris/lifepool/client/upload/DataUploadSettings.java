@@ -10,23 +10,39 @@ import java.util.Set;
 
 import daris.lifepool.client.connection.ConnectionSettings;
 
-public class UploadSettings extends ConnectionSettings {
+public class DataUploadSettings extends ConnectionSettings {
 
     public static final String PROPERTY_CONTINUE_ON_ERROR = "continue-on-error";
     public static final String PROPERTY_CSUM = "csum";
     public static final String PROPERTY_PATIENT_ID_MAP = "patient.id.map";
     public static final String PROPERTY_PID = "pid";
     public static final String PROPERTY_VERBOSE = "verbose";
+    public static final String PROPERTY_LOGGING = "logging";
 
     private boolean _continueOnError;
     private boolean _csum;
     private File _patientIdMappingFile;
     private String _pid;
     private boolean _verbose;
+    private boolean _logging;
     private Set<File> _files;
 
-    public UploadSettings(Properties properties, File... files) {
+    public DataUploadSettings(Properties properties, File... files) {
         super(properties);
+        _files = new LinkedHashSet<File>();
+        if (files != null) {
+            for (File file : files) {
+                _files.add(file);
+            }
+        }
+    }
+
+    public DataUploadSettings() {
+        this(null);
+    }
+
+    public void loadFromProperties(Properties properties) {
+        super.loadFromProperties(properties);
         if (properties != null) {
             if (properties.containsKey(PROPERTY_PID)) {
                 _pid = properties.getProperty(PROPERTY_PID);
@@ -46,11 +62,9 @@ public class UploadSettings extends ConnectionSettings {
                 String verbose = properties.getProperty(PROPERTY_VERBOSE);
                 _verbose = "1".equals(verbose) || "true".equalsIgnoreCase(verbose);
             }
-        }
-        _files = new LinkedHashSet<File>();
-        if (files != null) {
-            for (File file : files) {
-                _files.add(file);
+            if (properties.containsKey(PROPERTY_LOGGING)) {
+                String logging = properties.getProperty(PROPERTY_LOGGING);
+                _logging = "1".equals(logging) || "true".equalsIgnoreCase(logging);
             }
         }
     }
@@ -89,6 +103,14 @@ public class UploadSettings extends ConnectionSettings {
 
     public boolean verbose() {
         return _verbose;
+    }
+
+    public void setLogging(boolean logging) {
+        _logging = logging;
+    }
+
+    public boolean logging() {
+        return _logging;
     }
 
     public String projectId() {
@@ -134,7 +156,7 @@ public class UploadSettings extends ConnectionSettings {
         }
     }
 
-    public static UploadSettings loadFromPropertiesFile(File propertiesFile) {
+    public static DataUploadSettings loadFromPropertiesFile(File propertiesFile) {
         Properties properties = new Properties();
         try {
             if (propertiesFile.exists()) {
@@ -148,10 +170,10 @@ public class UploadSettings extends ConnectionSettings {
         } catch (Throwable e) {
             e.printStackTrace();
         }
-        return new UploadSettings(properties);
+        return new DataUploadSettings(properties);
     }
 
-    public static UploadSettings loadFromPropertiesFile(String propertiesFilePath) {
+    public static DataUploadSettings loadFromPropertiesFile(String propertiesFilePath) {
         return loadFromPropertiesFile(new File(propertiesFilePath));
     }
 

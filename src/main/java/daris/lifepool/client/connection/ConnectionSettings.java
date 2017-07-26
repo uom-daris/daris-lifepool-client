@@ -30,6 +30,10 @@ public class ConnectionSettings {
     private String _sid;
 
     public ConnectionSettings(Properties properties) {
+        loadFromProperties(properties);
+    }
+
+    protected void loadFromProperties(Properties properties) {
         if (properties != null) {
             if (properties.containsKey(PROPERTY_SERVER_HOST)) {
                 _host = properties.getProperty(PROPERTY_SERVER_HOST);

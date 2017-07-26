@@ -1,12 +1,10 @@
-package daris.lifepool.client;
+package daris.lifepool.client.upload;
 
 import java.io.File;
-import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.io.PipedInputStream;
 import java.io.PipedOutputStream;
-import java.io.PrintStream;
 import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -15,12 +13,15 @@ import java.nio.file.SimpleFileVisitor;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.text.SimpleDateFormat;
 import java.util.AbstractMap.SimpleEntry;
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Date;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.logging.Formatter;
+import java.util.logging.Level;
+import java.util.logging.LogRecord;
+import java.util.logging.Logger;
 import java.util.stream.Stream;
 
 import com.pixelmed.dicom.Attribute;
@@ -31,7 +32,6 @@ import com.pixelmed.dicom.TransferSyntax;
 
 import arc.archive.ArchiveOutput;
 import arc.archive.ArchiveRegistry;
-import arc.mf.client.RemoteServer;
 import arc.mf.client.ServerClient;
 import arc.mf.client.ServerClient.Connection;
 import arc.mf.client.archive.Archive;
@@ -41,298 +41,156 @@ import arc.xml.XmlStringWriter;
 import daris.dicom.util.DicomChecksumUtils;
 import daris.lifepool.client.dicom.DicomIngest;
 import daris.lifepool.client.dicom.DicomModify;
+import daris.lifepool.client.task.Task;
+import daris.util.CiteableIdUtils;
+import daris.util.LoggingUtils;
+import daris.util.ThrowableUtils;
 
-public class DataUpload {
+public class DataUpload extends Task<Void> {
 
-    public static final String DEFAULT_AE_TITLE = "DARIS_LIFEPOOL_CLIENT";
+    public static final String APP = "daris-lifepool-data-upload";
 
-    public static final String APPLICATION_NAME = "daris-lifepool-data-upload";
+    public static final String PROPERTIES_FILE = new StringBuilder()
+            .append(System.getProperty("user.home").replace('\\', '/')).append("/.daris/").append(DataUpload.APP)
+            .append(".properties").toString();
 
     public static final int INDENT = 4;
 
-    public static void main(String[] args) throws Throwable {
-        if (args == null || args.length == 0) {
-            showHelp();
-            System.exit(1);
+    public static DataUploadSettings loadSettingsFromPropertiesFile() {
+        return DataUploadSettings.loadFromPropertiesFile(PROPERTIES_FILE);
+    }
+
+    static Logger getLogger() throws Throwable {
+        Logger logger = LoggingUtils.createLogger(APP, Level.ALL, false);
+        logger.addHandler(LoggingUtils.createFileHandler(APP));
+        logger.addHandler(LoggingUtils.createStreamHandler(System.out, Level.ALL, new Formatter() {
+
+            @Override
+            public String format(LogRecord record) {
+                StringBuilder sb = new StringBuilder();
+                String message = record.getMessage();
+                if (message != null) {
+                    Level level = record.getLevel();
+                    if (level.equals(Level.WARNING) || level.equals(Level.SEVERE)) {
+                        while (message.startsWith(" ")) {
+                            message = message.substring(1);
+                            sb.append(" ");
+                        }
+                        sb.append(level.getName() + ": ");
+                    }
+                    sb.append(message);
+                }
+                sb.append("\n");
+                Throwable error = record.getThrown();
+                if (error != null) {
+                    sb.append(ThrowableUtils.getStackTrace(error));
+                    sb.append("\n");
+                }
+                return sb.toString();
+            }
+        }));
+        return logger;
+    }
+
+    private DataUploadSettings _settings;
+
+    public DataUpload(DataUploadSettings settings) throws Throwable {
+        _settings = settings;
+        _settings.setApp(APP);
+        if (settings.logging()) {
+            setLogger(getLogger());
         }
-        String mfHost = null;
-        int mfPort = -1;
-        String mfTransport = null;
-        boolean useHttp = true;
-        boolean encrypt = true;
-        String mfAuth = null;
-        String mfToken = null;
-        String mfSid = null;
-        String pid = null;
-        File patientIdMapFile = null;
-        List<File> inputs = new ArrayList<File>();
-        Boolean continueOnError = null;
-        Boolean csumCheck = null;
-        Boolean beVerbose = null;
+    }
+
+    @Override
+    public Void call() throws Exception {
         try {
-            for (int i = 0; i < args.length;) {
-                if (args[i].equals("--help") || args[i].equals("-h")) {
-                    showHelp();
-                    System.exit(0);
-                } else if (args[i].equals("--mf.host")) {
-                    if (mfHost != null) {
-                        throw new Exception("--mf.host has already been specified.");
+            execute();
+            return null;
+        } catch (Throwable e) {
+            if (e instanceof Exception) {
+                if (e instanceof InterruptedException) {
+                    if (!Thread.interrupted()) {
+                        Thread.currentThread().interrupt();
                     }
-                    mfHost = args[i + 1];
-                    i += 2;
-                } else if (args[i].equals("--mf.port")) {
-                    if (mfPort > 0) {
-                        throw new Exception("--mf.port has already been specified.");
-                    }
-                    try {
-                        mfPort = Integer.parseInt(args[i + 1]);
-                    } catch (Throwable e) {
-                        throw new Exception("Invalid mf.port: " + args[i + 1], e);
-                    }
-                    if (mfPort <= 0 || mfPort > 65535) {
-                        throw new Exception("Invalid mf.port: " + args[i + 1]);
-                    }
-                    i += 2;
-                } else if (args[i].equals("--mf.transport")) {
-                    if (mfTransport != null) {
-                        throw new Exception("--mf.transport has already been specified.");
-                    }
-                    mfTransport = args[i + 1];
-                    i += 2;
-                    if ("http".equalsIgnoreCase(mfTransport)) {
-                        useHttp = true;
-                        encrypt = false;
-                    } else if ("https".equalsIgnoreCase(mfTransport)) {
-                        useHttp = true;
-                        encrypt = true;
-                    } else if ("tcp/ip".equalsIgnoreCase(mfTransport)) {
-                        useHttp = false;
-                        encrypt = false;
-                    } else {
-                        throw new Exception(
-                                "Invalid mf.transport: " + mfTransport + ". Expects http, https or tcp/ip.");
-                    }
-                } else if (args[i].equals("--mf.auth")) {
-                    if (mfAuth != null) {
-                        throw new Exception("--mf.auth has already been specified.");
-                    }
-                    if (mfSid != null || mfToken != null) {
-                        throw new Exception(
-                                "You can only specify one of mf.auth, mf.token or mf.sid. Found more than one.");
-                    }
-                    mfAuth = args[i + 1];
-                    i += 2;
-                } else if (args[i].equals("--mf.token")) {
-                    if (mfToken != null) {
-                        throw new Exception("--mf.token has already been specified.");
-                    }
-                    if (mfSid != null || mfAuth != null) {
-                        throw new Exception(
-                                "You can only specify one of mf.auth, mf.token or mf.sid. Found more than one.");
-                    }
-                    mfToken = args[i + 1];
-                    i += 2;
-                } else if (args[i].equals("--mf.sid")) {
-                    if (mfSid != null) {
-                        throw new Exception("--mf.sid has already been specified.");
-                    }
-                    if (mfToken != null || mfAuth != null) {
-                        throw new Exception(
-                                "You can only specify one of mf.auth, mf.token or mf.sid. Found more than one.");
-                    }
-                    mfSid = args[i + 1];
-                    i += 2;
-                } else if (args[i].equals("--pid")) {
-                    if (pid != null) {
-                        throw new Exception("--pid has already been specified.");
-                    }
-                    pid = args[i + 1];
-                    i += 2;
-                } else if (args[i].equals("--patient.id.map")) {
-                    if (patientIdMapFile != null) {
-                        throw new Exception("--patient.id.map has already been specified.");
-                    }
-                    patientIdMapFile = new File(args[i + 1]);
-                    if (!patientIdMapFile.exists()) {
-                        throw new FileNotFoundException("File " + args[i + 1] + " is not found.");
-                    }
-                    i += 2;
-                } else if (args[i].equals("--continue-on-error")) {
-                    if (continueOnError != null) {
-                        throw new Exception("--continue-on-error has already been specified.");
-                    }
-                    continueOnError = true;
-                    i++;
-                } else if (args[i].equals("--csum")) {
-                    if (csumCheck != null) {
-                        throw new Exception("--csum has already been specified.");
-                    }
-                    csumCheck = true;
-                    i++;
-                } else if (args[i].equals("--verbose")) {
-                    if (beVerbose != null) {
-                        throw new Exception("--verbose has already been specified.");
-                    }
-                    beVerbose = true;
-                    i++;
-                } else {
-                    File input = new File(args[i]);
-                    if (!input.exists()) {
-                        throw new FileNotFoundException("File " + args[i] + " is not found.");
-                    }
-                    inputs.add(input);
-                    i++;
                 }
+                throw (Exception) e;
+            } else {
+                throw new Exception(e);
             }
-            if (pid == null) {
-                throw new Exception("--pid is not specified.");
-            }
-            if (patientIdMapFile == null) {
-                throw new Exception("--patient.id.map is not specified.");
-            }
-            if (inputs.isEmpty()) {
-                throw new Exception("No input dicom file/directory is specified.");
-            }
-            if (mfHost == null) {
-                throw new Exception("--mf.host is not specified.");
-            }
-            if (mfPort <= 0) {
-                throw new Exception("--mf.port is not specified.");
-            }
-            if (mfTransport == null) {
-                throw new Exception("--mf.transport is not specified.");
-            }
-            if (mfAuth == null && mfSid == null && mfToken == null) {
-                throw new Exception("You need to specify one of mf.auth, mf.token or mf.sid. Found none.");
-            }
-            if (continueOnError == null) {
-                continueOnError = false;
-            }
-            if (csumCheck == null) {
-                csumCheck = false;
-            }
-            if (beVerbose == null) {
-                beVerbose = false;
-            }
-            final boolean stopOnError = !continueOnError;
-            final boolean verbose = beVerbose;
-            if (verbose) {
-                System.out.print("loading (Accession Number -> Patient ID) mapping file: "
-                        + patientIdMapFile.getAbsolutePath() + "...");
-            }
-            Map<String, String> patientIdMap = loadPatientIdMap(patientIdMapFile);
-            if (verbose) {
-                System.out.println("done.");
-            }
+        }
+    }
 
-            RemoteServer server = new RemoteServer(mfHost, mfPort, useHttp, encrypt);
-            final ServerClient.Connection cxn = server.open();
-            try {
-                if (mfToken != null) {
-                    cxn.connectWithToken(mfToken);
-                } else if (mfAuth != null) {
-                    String[] parts = mfAuth.split(",");
-                    if (parts.length != 3) {
-                        throw new Exception("Invalid mf.auth: " + mfAuth
-                                + ". Expects a string in the form of 'domain,user,password'");
-                    }
-                    cxn.connect(parts[0], parts[1], parts[2]);
-                } else {
-                    cxn.reconnect(mfSid);
-                }
-                final String projectCid = pid;
-                final boolean csum = csumCheck;
-                for (File input : inputs) {
-                    if (Files.isDirectory(input.toPath())) {
-                        Files.walkFileTree(input.toPath(), new SimpleFileVisitor<Path>() {
-                            @Override
-                            public FileVisitResult visitFile(Path path, BasicFileAttributes attrs) throws IOException {
-                                try {
-                                    uploadDicomFile(cxn, path.toFile(), projectCid, patientIdMap, csum, verbose);
-                                } catch (Throwable e) {
-                                    e.printStackTrace(System.err);
-                                    if (stopOnError) {
-                                        return FileVisitResult.TERMINATE;
-                                    } else {
-                                        return FileVisitResult.CONTINUE;
-                                    }
-                                }
-                                return FileVisitResult.CONTINUE;
-                            }
-
-                            @Override
-                            public FileVisitResult visitFileFailed(Path path, IOException ioe) {
-                                ioe.printStackTrace(System.err);
-                                if (stopOnError) {
+    private void execute() throws Throwable {
+        logInfo("loading (AccessionNumber -> PatientID) mapping from file: '"
+                + _settings.patientIdMappingFile().getAbsolutePath() + "'");
+        Map<String, String> patientIdMapping = loadPatientIdMapping(_settings.patientIdMappingFile());
+        ServerClient.Connection cxn = connect(_settings);
+        try {
+            Set<File> inputs = _settings.files();
+            for (File input : inputs) {
+                if (Files.isDirectory(input.toPath())) {
+                    Files.walkFileTree(input.toPath(), new SimpleFileVisitor<Path>() {
+                        @Override
+                        public FileVisitResult visitFile(Path path, BasicFileAttributes attrs) throws IOException {
+                            try {
+                                uploadDicomFile(cxn, path.toFile(), patientIdMapping);
+                            } catch (Throwable e) {
+                                e.printStackTrace(System.err);
+                                if (!_settings.continueOnError()) {
                                     return FileVisitResult.TERMINATE;
                                 } else {
                                     return FileVisitResult.CONTINUE;
                                 }
                             }
-                        });
-                    } else {
-                        try {
-                            uploadDicomFile(cxn, input, projectCid, patientIdMap, csum, verbose);
-                        } catch (Throwable e) {
-                            if (stopOnError) {
-                                throw e;
+                            return FileVisitResult.CONTINUE;
+                        }
+
+                        @Override
+                        public FileVisitResult visitFileFailed(Path path, IOException ioe) {
+                            ioe.printStackTrace(System.err);
+                            if (!_settings.continueOnError()) {
+                                return FileVisitResult.TERMINATE;
                             } else {
-                                e.printStackTrace(System.err);
+                                return FileVisitResult.CONTINUE;
                             }
+                        }
+                    });
+                } else {
+                    try {
+                        uploadDicomFile(cxn, input, patientIdMapping);
+                    } catch (Throwable e) {
+                        if (!_settings.continueOnError()) {
+                            throw e;
+                        } else {
+                            logError(e.getMessage(), e);
                         }
                     }
                 }
-            } finally {
-                cxn.closeAndDiscard();
             }
-        } catch (IllegalArgumentException ex) {
-            System.err.println("Error: " + ex.getMessage());
-            showHelp();
-        } catch (Throwable e) {
-            throw e;
+        } finally {
+            cxn.closeAndDiscard();
         }
     }
 
-    private static void showHelp() {
-        System.out.println(
-                "Usage: data-upload [--help] --mf.host <host> --mf.port <port> --mf.transport <transport> [--mf.sid <sid>|--mf.token <token>|--mf.auth <domain,user,password>] [--csum] [--continue-on-error] --pid <project-cid> <dicom-files/dicom-directories>");
-        System.out.println("Description:");
-        System.out.println("    --mf.host <host>                     The Mediaflux server host.");
-        System.out.println("    --mf.port <port>                     The Mediaflux server port.");
-        System.out.println(
-                "    --mf.transport <transport>           The Mediaflux server transport, can be http, https or tcp/ip.");
-        System.out.println("    --mf.auth <domain,user,password>     The Mediaflux user authentication deatils.");
-        System.out.println("    --mf.token <token>                   The Mediaflux secure identity token.");
-        System.out.println("    --mf.sid <sid>                       The Mediaflux session id.");
-        System.out.println("    --pid <project-cid>                  The DaRIS project cid.");
-        System.out.println(
-                "    --patient.id.map <paitent-id-map>    The file contains AccessionNumber -> PatientID mapping.");
-        System.out.println("    --csum                               Generate and compare MD5 checksums of PixelData.");
-        System.out.println(
-                "    --continue-on-error                  Continue to upload remaining input files when error occurs.");
-        System.out.println("    --verbose                            Show detailed progress information.");
-        System.out.println("    --help                               Display help information.");
-    }
+    private void uploadDicomFile(ServerClient.Connection cxn, File dicomFile, Map<String, String> patientIdMapping)
+            throws Throwable {
 
-    public static void uploadDicomFile(ServerClient.Connection cxn, File dicomFile, String projectCid,
-            Map<String, String> patientIdMap, boolean csumCheck, boolean verbose) throws Throwable {
-
-        println("Uploading file: '" + dicomFile.getAbsolutePath() + "' ...");
-
+        logInfo("Uploading file: '" + dicomFile.getAbsolutePath() + "' ...");
         if (!DicomFileUtilities.isDicomOrAcrNemaFile(dicomFile)) {
-            println("ignored. File: '" + dicomFile.getAbsolutePath() + "' is NOT a DICOM file.", INDENT);
+            logInfo("ignored. File: '" + dicomFile.getAbsolutePath() + "' is NOT a DICOM file.", INDENT);
             return;
         }
 
         AttributeList attributeList = new AttributeList();
 
-        if (verbose) {
-            println("reading DICOM file: '" + dicomFile.getName() + "' ...", INDENT);
+        if (_settings.verbose()) {
+            logInfo("reading DICOM file: '" + dicomFile.getName() + "' ...", INDENT);
         }
         attributeList.read(dicomFile);
 
-        if (verbose) {
-            println("editting DICOM object in memory ...", INDENT);
+        if (_settings.verbose()) {
+            logInfo("editting DICOM object in memory ...", INDENT);
         }
         /*
          * AccessionNumber:
@@ -341,14 +199,14 @@ public class DataUpload {
         String accessionNumberInDicomFile = Attribute.getSingleStringValueOrNull(attributeList,
                 TagFromName.AccessionNumber);
         if (!accessionNumber.equals(accessionNumberInDicomFile)) {
-            if (verbose) {
-                println("Warning: AccessionNumber: " + accessionNumberInDicomFile + " in file: '"
+            if (_settings.verbose()) {
+                logWarning("AccessionNumber: " + accessionNumberInDicomFile + " in file: '"
                         + dicomFile.getAbsolutePath() + "' does not match its directory name. Set AccessionNumber to: "
                         + accessionNumber + ".", INDENT);
             }
             DicomModify.putAttribute(attributeList, TagFromName.AccessionNumber, accessionNumber);
         }
-        println("AccessionNumber: " + accessionNumber, INDENT);
+        logInfo("AccessionNumber: " + accessionNumber, INDENT);
 
         /*
          * SeriesInstanceUID: unique identifier for the series
@@ -380,9 +238,9 @@ public class DataUpload {
         /*
          * check if the dataset already exists
          */
-        String datasetCid = findDicomDataset(cxn, projectCid, sopInstanceUID, accessionNumber, true);
+        String datasetCid = findDicomDataset(cxn, _settings.projectId(), sopInstanceUID, accessionNumber, true);
         if (datasetCid != null) {
-            if (csumCheck) {
+            if (_settings.checkCSum()) {
                 SimpleEntry<String, Boolean> serverMD5Info = null;
                 try {
                     serverMD5Info = getPixelDataChecksum(cxn, datasetCid, true);
@@ -397,35 +255,35 @@ public class DataUpload {
                 }
 
                 if (serverMD5 == null) {
-                    if (verbose) {
-                        println("Warning: No MD5 checksum was generated for dataset " + datasetCid, INDENT);
+                    if (_settings.verbose()) {
+                        logWarning("No MD5 checksum was generated for dataset " + datasetCid, INDENT);
                     }
                 } else {
-                    if (verbose) {
-                        println("MD5 checksum: " + serverMD5 + " for dataset " + datasetCid, INDENT);
+                    if (_settings.verbose()) {
+                        logInfo("MD5 checksum: " + serverMD5 + " for dataset " + datasetCid, INDENT);
                     }
                 }
 
                 if (localMD5 == null) {
-                    if (verbose) {
-                        println("Warning: No MD5 checksum was generated for file: '" + dicomFile.getAbsolutePath()
-                                + "'", INDENT);
+                    if (_settings.verbose()) {
+                        logWarning("No MD5 checksum was generated for file: '" + dicomFile.getAbsolutePath() + "'",
+                                INDENT);
                     }
                 } else {
-                    if (verbose) {
-                        println("MD5 checksum: " + localMD5 + " for file: '" + dicomFile.getAbsolutePath() + "'",
+                    if (_settings.verbose()) {
+                        logInfo("MD5 checksum: " + localMD5 + " for file: '" + dicomFile.getAbsolutePath() + "'",
                                 INDENT);
                     }
                 }
 
                 if (serverMD5 != null && localMD5 != null && serverMD5.equalsIgnoreCase(localMD5)) {
-                    if (verbose) {
-                        println("MD5 checksum: " + localMD5 + " match for dataset " + datasetCid + " and file: '"
+                    if (_settings.verbose()) {
+                        logInfo("MD5 checksum: " + localMD5 + " match for dataset " + datasetCid + " and file: '"
                                 + dicomFile.getAbsolutePath() + "'", INDENT);
                     }
                 } else if (serverMD5 == null && localMD5 == null) {
-                    if (verbose) {
-                        println("Warning: No MD5 checksum can be generated on both server dataset " + datasetCid
+                    if (_settings.verbose()) {
+                        logWarning("No MD5 checksum can be generated on both server dataset " + datasetCid
                                 + " and local file: " + dicomFile.getAbsolutePath()
                                 + ". The DICOM file may not contain PixelData.", INDENT);
                     }
@@ -434,15 +292,15 @@ public class DataUpload {
                             + ") of PixelData does not match with dataset " + datasetCid + " (" + serverMD5 + ").");
                 }
             }
-            println("ignored. File was previous uploaded as dataset " + datasetCid, INDENT);
+            logInfo("ignored. File was previous uploaded as dataset " + datasetCid, INDENT);
             return;
         }
 
         /*
          * modify dicom file
          */
-        if (verbose) {
-            println("modifying temporary copy of file: '" + dicomFile.getAbsolutePath() + "'", INDENT);
+        if (_settings.verbose()) {
+            logInfo("modifying temporary copy of file: '" + dicomFile.getAbsolutePath() + "'", INDENT);
         }
         String prefix = dicomFile.getName();
         if (prefix.endsWith(".dcm") || prefix.endsWith(".DCM")) {
@@ -450,9 +308,9 @@ public class DataUpload {
         }
         // File modifiedDicomFile = File.createTempFile(prefix, ".dcm");
 
-        DicomModify.putAttribute(attributeList, TagFromName.PatientName, projectCid);
+        DicomModify.putAttribute(attributeList, TagFromName.PatientName, _settings.projectId());
 
-        String patientId = patientIdMap.get(accessionNumber);
+        String patientId = patientIdMapping.get(accessionNumber);
         if (patientId == null) {
             throw new Exception("Could not find PatientID in mapping file for AccessionNumber: " + accessionNumber);
         }
@@ -461,13 +319,14 @@ public class DataUpload {
         /*
          * find first dataset in the study
          */
-        XmlDoc.Element firstDatasetAE = getFirstDicomDataset(cxn, projectCid, seriesInstanceUID);
+        XmlDoc.Element firstDatasetAE = getFirstDicomDataset(cxn, _settings.projectId(), seriesInstanceUID);
         if (firstDatasetAE == null) {
             /*
              * dicom ingest
              */
-            println("ingesting dataset...", INDENT);
-            String studyCid = DicomIngest.ingest(cxn, attributeList, dicomFile.getAbsolutePath(), projectCid);
+            logInfo("ingesting dataset...", INDENT);
+            String studyCid = DicomIngest.ingest(cxn, attributeList, dicomFile.getAbsolutePath(),
+                    _settings.projectId());
             firstDatasetAE = cxn.execute("asset.query", "<action>get-meta</action><size>1</size><where>cid in '"
                     + studyCid + "' and mf-note hasno value</where>").element("asset");
 
@@ -482,25 +341,44 @@ public class DataUpload {
                 throw new Exception("The newly ingested dataset " + firstDatasetAE.value("cid") + " is locked.");
             }
 
-            println("ingested dataset: " + firstDatasetCid, INDENT);
+            logInfo("ingested dataset: " + firstDatasetCid, INDENT);
 
             // update study name & description
-            println("updating metadata for study " + studyCid, INDENT);
+            logInfo("updating metadata for study " + studyCid, INDENT);
             updateStudyName(cxn, studyCid, attributeList);
 
             // update newly ingested dataset
-            println("updating metadata for dataset " + firstDatasetCid, INDENT);
-            updateDicomDataset(cxn, firstDatasetAE, dicomFile.getAbsolutePath(), attributeList, csumCheck);
+            logInfo("updating metadata for dataset " + firstDatasetCid, INDENT);
+            updateDicomDataset(cxn, firstDatasetAE, dicomFile.getAbsolutePath(), attributeList, _settings.checkCSum());
 
         } else {
             /*
              * create dataset
              */
             String studyCid = CiteableIdUtils.parent(firstDatasetAE.value("cid"));
-            println("creating dataset (in study " + studyCid + ")...", INDENT);
-            datasetCid = createDicomDataset(cxn, firstDatasetAE, attributeList, dicomFile.getAbsolutePath(), csumCheck);
-            println("created dataset " + datasetCid, INDENT);
+            logInfo("creating dataset (in study " + studyCid + ")...", INDENT);
+            datasetCid = createDicomDataset(cxn, firstDatasetAE, attributeList, dicomFile.getAbsolutePath(),
+                    _settings.checkCSum());
+            logInfo("created dataset " + datasetCid, INDENT);
         }
+    }
+
+    static Map<String, String> loadPatientIdMapping(File file) throws Throwable {
+        Map<String, String> map = new HashMap<String, String>((120000 * 4 + 2) / 3);
+        try (Stream<String> stream = Files.lines(file.toPath())) {
+            stream.forEach(line -> {
+                if (line.matches("^\\ *\\d+\\ *,.+")) {
+                    String[] tokens = line.trim().split("\\ *,\\ *");
+                    String patientId = tokens[0];
+                    String accessionNumber = tokens[1];
+                    map.put(accessionNumber, patientId);
+                }
+            });
+        }
+        if (map.isEmpty()) {
+            throw new IllegalArgumentException("Failed to parse patient id mapping file: " + file.getPath() + ".");
+        }
+        return map;
     }
 
     private static String findDicomDataset(ServerClient.Connection cxn, String projectCid, String sopInstanceUID,
@@ -912,43 +790,6 @@ public class DataUpload {
             cxn.execute("asset.set", w.document());
         }
 
-    }
-
-    private static Map<String, String> loadPatientIdMap(File file) throws Throwable {
-        Map<String, String> map = new HashMap<String, String>((120000 * 4 + 2) / 3);
-        try (Stream<String> stream = Files.lines(file.toPath())) {
-            stream.forEach(line -> {
-                if (line.matches("^\\ *\\d+\\ *,.+")) {
-                    String[] tokens = line.trim().split("\\ *,\\ *");
-                    String patientId = tokens[0];
-                    String accessionNumber = tokens[1];
-                    map.put(accessionNumber, patientId);
-                }
-            });
-        }
-        if (map.isEmpty()) {
-            throw new Exception("Failed to parse patient id mapping file: " + file.getAbsolutePath() + ".");
-        }
-        return map;
-    }
-
-    private static void println(PrintStream ps, String message, int indent) {
-        StringBuilder sb = new StringBuilder();
-        if (indent > 0) {
-            for (int i = 0; i < indent; i++) {
-                sb.append(' ');
-            }
-        }
-        sb.append(message);
-        ps.println(sb.toString());
-    }
-
-    private static void println(String message, int indent) {
-        println(System.out, message, indent);
-    }
-
-    private static void println(String message) {
-        println(System.out, message, 0);
     }
 
 }

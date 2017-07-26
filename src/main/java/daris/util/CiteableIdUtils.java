@@ -1,4 +1,4 @@
-package daris.lifepool.client;
+package daris.util;
 
 public class CiteableIdUtils {
 

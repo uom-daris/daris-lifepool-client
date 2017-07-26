@@ -16,6 +16,8 @@ public class LoggingUtils {
     public static final int DEFAULT_FILE_SIZE_LIMIT = MB * 100;
     public static final int DEFAULT_NUM_FILES_TO_USE = 2;
     public static final String DATE_FORMAT = "yyyy-MM-dd HH:mm:ss.SSS";
+    public static final boolean IS_WINDOWS = System.getProperty("os.name", "generic").toLowerCase()
+            .indexOf("windows") >= 0;
 
     public static Formatter DEFAULT_FORMATTER = new Formatter() {
         @Override
@@ -27,10 +29,16 @@ public class LoggingUtils {
             sb.append("[thread ").append(record.getThreadID()).append("] ");
             sb.append(String.format("%7s", record.getLevel().getName().toUpperCase())).append(" ");
             sb.append(record.getMessage());
+            if (IS_WINDOWS) {
+                sb.append("\r");
+            }
             sb.append("\n");
             Throwable error = record.getThrown();
             if (error != null) {
                 sb.append(ThrowableUtils.getStackTrace(error));
+                if (IS_WINDOWS) {
+                    sb.append("\r");
+                }
                 sb.append("\n");
             }
             return sb.toString();
@@ -65,7 +73,8 @@ public class LoggingUtils {
 
     public static FileHandler createFileHandler(String logFileNamePattern, int sizeLimitInBytes, int numLogFilesToUse,
             Level level, boolean append) throws Throwable {
-        return createFileHandler(logFileNamePattern, sizeLimitInBytes, numLogFilesToUse, level, DEFAULT_FORMATTER, true);
+        return createFileHandler(logFileNamePattern, sizeLimitInBytes, numLogFilesToUse, level, DEFAULT_FORMATTER,
+                true);
     }
 
     public static FileHandler createFileHandler(String name, Level level) throws Throwable {

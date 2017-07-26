@@ -5,4 +5,4 @@
 JAR=$(dirname $0)/daris-lifepool-client.jar
 [[ ! -f $JAR ]] && echo "${JAR} is not found." >&2 && exit 2
 
-java -cp $JAR daris.lifepool.client.DataUpload ${1+"$@"}
+java -cp $JAR daris.lifepool.client.upload.DataUploadCLI ${1+"$@"}

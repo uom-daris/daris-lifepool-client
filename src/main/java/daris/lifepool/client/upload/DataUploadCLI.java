@@ -2,13 +2,13 @@ package daris.lifepool.client.upload;
 
 import java.io.File;
 
-public class UploadCLI {
+public class DataUploadCLI {
 
     public static void main(String[] args) throws Throwable {
         /*
          * load, parse & validate settings
          */
-        UploadSettings settings = Upload.loadSettingsFromPropertiesFile();
+        DataUploadSettings settings = DataUpload.loadSettingsFromPropertiesFile();
         try {
             for (int i = 0; i < args.length;) {
                 if (args[i].equals("--help") || args[i].equals("-h")) {
@@ -60,6 +60,9 @@ public class UploadCLI {
                 } else if (args[i].equals("--verbose")) {
                     settings.setVerbose(true);
                     i++;
+                } else if (args[i].equals("--logging")) {
+                    settings.setLogging(true);
+                    i++;
                 } else {
                     File input = new File(args[i]);
                     if (!input.exists()) {
@@ -79,14 +82,15 @@ public class UploadCLI {
         /*
          * upload
          */
-        new Upload(settings).call();
+        new DataUpload(settings).call();
     }
 
     private static void showHelp() {
         // @formatter:off
         System.out.println();
-        System.out.println("Usage: " + Upload.APP + " [--help] --mf.host <host> --mf.port <port> --mf.transport <transport> [--mf.token <token>|--mf.auth <domain,user,password>|--mf.sid <sid>] [--csum] [--continue-on-error] --pid <project-cid> <dicom-files/dicom-directories>");
-        System.out.println("Description:");
+        System.out.println("Usage: " + DataUpload.APP + " [--help] --mf.host <host> --mf.port <port> --mf.transport <transport> [--mf.token <token>|--mf.auth <domain,user,password>|--mf.sid <sid>] [--csum] [--continue-on-error] [--verbose] --pid <project-cid> <dicom-files/dicom-directories>");
+        System.out.println();
+        System.out.println("Options:");
         System.out.println("    --mf.host <host>                     The Mediaflux server host.");
         System.out.println("    --mf.port <port>                     The Mediaflux server port.");
         System.out.println("    --mf.transport <transport>           The Mediaflux server transport, can be http, https or tcp/ip.");
@@ -95,8 +99,11 @@ public class UploadCLI {
         System.out.println("    --mf.sid <sid>                       The Mediaflux session id.");
         System.out.println("    --pid <project-cid>                  The DaRIS project cid.");
         System.out.println("    --patient.id.map <paitent-id-map>    The file contains AccessionNumber -> PatientID mapping.");
+        System.out.println();
+        System.out.println("Switches:");        
         System.out.println("    --csum                               Generate and compare MD5 checksums of PixelData.");
         System.out.println("    --continue-on-error                  Continue to upload remaining input files when error occurs.");
+        System.out.println("    --logging                            Enable logging. Log file will be in directory: " + System.getProperty("user.dir") + ".");
         System.out.println("    --verbose                            Show detailed progress information.");
         System.out.println("    --help                               Display help information.");
         System.out.println();
