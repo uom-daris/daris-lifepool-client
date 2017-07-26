@@ -20,5 +20,10 @@
 			<directory>src/main/bash</directory>
 			<outputDirectory>${project.artifactId}-${project.version}</outputDirectory>
 		</fileSet>
+		<fileSet>
+			<fileMode>0755</fileMode>
+			<directory>src/main/windows</directory>
+			<outputDirectory>${project.artifactId}-${project.version}</outputDirectory>
+		</fileSet>
 	</fileSets>
 </assembly>

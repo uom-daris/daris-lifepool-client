@@ -168,7 +168,7 @@ public class DataShare {
                 expire = DEFAULT_EXPIRE_DAYS;
             }
 
-            System.out.print("parsing manifest file: " + manifestFile.getCanonicalPath() + "...");
+            System.out.print("parsing manifest file: " + manifestFile.getAbsolutePath() + "...");
             List<Query> queries = QueryManifestParser.parse(manifestFile, !includeNull);
             System.out.println("done.");
 

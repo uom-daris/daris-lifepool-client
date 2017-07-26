@@ -179,7 +179,7 @@ public class DicomIngest {
         Archive.declareSupportForAllTypes();
         Collections.sort(dicomFiles);
         ServerClient.Input sci = new ServerClient.GeneratedInput("application/arc-archive", "aar",
-                dicomFiles.get(0).getParentFile().getCanonicalPath(), -1, null) {
+                dicomFiles.get(0).getParentFile().getAbsolutePath(), -1, null) {
 
             @Override
             protected void copyTo(OutputStream os, AbortCheck ac) throws Throwable {

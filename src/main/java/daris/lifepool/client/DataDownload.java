@@ -183,10 +183,10 @@ public class DataDownload {
             if (!extract) {
                 outputZipFile = new File(outputDir, outputZipFileNameFor(manifestFile.getName()));
                 if (outputZipFile.exists()) {
-                    throw new Exception("Output file: \"" + outputZipFile.getCanonicalPath() + "\" already exists.");
+                    throw new Exception("Output file: \"" + outputZipFile.getAbsolutePath() + "\" already exists.");
                 }
             }
-            System.out.print("parsing manifest file: " + manifestFile.getCanonicalPath() + "...");
+            System.out.print("parsing manifest file: " + manifestFile.getAbsolutePath() + "...");
             List<Query> queries = QueryManifestParser.parse(manifestFile, !includeNull);
             System.out.println("done.");
 
