@@ -1,4 +1,4 @@
-package daris.lifepool.client.upload;
+package daris.lifepool.client;
 
 import java.io.File;
 import java.io.IOException;
@@ -50,15 +50,7 @@ public class DataUpload extends Task<Void> {
 
     public static final String APP = "daris-lifepool-data-upload";
 
-    public static final String PROPERTIES_FILE = new StringBuilder()
-            .append(System.getProperty("user.home").replace('\\', '/')).append("/.daris/").append(DataUpload.APP)
-            .append(".properties").toString();
-
     public static final int INDENT = 4;
-
-    public static DataUploadSettings loadSettingsFromPropertiesFile() {
-        return DataUploadSettings.loadFromPropertiesFile(PROPERTIES_FILE);
-    }
 
     static Logger getLogger() throws Throwable {
         Logger logger = LoggingUtils.createLogger(APP, Level.ALL, false);
@@ -108,6 +100,7 @@ public class DataUpload extends Task<Void> {
             execute();
             return null;
         } catch (Throwable e) {
+            logError(e);
             if (e instanceof Exception) {
                 if (e instanceof InterruptedException) {
                     if (!Thread.interrupted()) {
@@ -136,7 +129,7 @@ public class DataUpload extends Task<Void> {
                             try {
                                 uploadDicomFile(cxn, path.toFile(), patientIdMapping);
                             } catch (Throwable e) {
-                                e.printStackTrace(System.err);
+                                logError(e);
                                 if (!_settings.continueOnError()) {
                                     return FileVisitResult.TERMINATE;
                                 } else {
@@ -148,7 +141,7 @@ public class DataUpload extends Task<Void> {
 
                         @Override
                         public FileVisitResult visitFileFailed(Path path, IOException ioe) {
-                            ioe.printStackTrace(System.err);
+                            logError(ioe);
                             if (!_settings.continueOnError()) {
                                 return FileVisitResult.TERMINATE;
                             } else {
@@ -163,7 +156,7 @@ public class DataUpload extends Task<Void> {
                         if (!_settings.continueOnError()) {
                             throw e;
                         } else {
-                            logError(e.getMessage(), e);
+                            logError(e);
                         }
                     }
                 }
@@ -325,8 +318,8 @@ public class DataUpload extends Task<Void> {
              * dicom ingest
              */
             logInfo("ingesting dataset...", INDENT);
-            String studyCid = DicomIngest.ingest(cxn, attributeList, dicomFile.getAbsolutePath(),
-                    _settings.projectId());
+            String studyCid = DicomIngest.ingest(cxn, attributeList, dicomFile.getAbsolutePath(), _settings.projectId(),
+                    logger());
             firstDatasetAE = cxn.execute("asset.query", "<action>get-meta</action><size>1</size><where>cid in '"
                     + studyCid + "' and mf-note hasno value</where>").element("asset");
 

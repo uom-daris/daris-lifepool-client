@@ -1,23 +1,18 @@
-package daris.lifepool.client.upload;
+package daris.lifepool.client;
 
-import java.io.BufferedInputStream;
 import java.io.File;
-import java.io.FileInputStream;
-import java.io.InputStream;
 import java.util.LinkedHashSet;
 import java.util.Properties;
 import java.util.Set;
 
-import daris.lifepool.client.connection.ConnectionSettings;
-
 public class DataUploadSettings extends ConnectionSettings {
 
-    public static final String PROPERTY_CONTINUE_ON_ERROR = "continue-on-error";
-    public static final String PROPERTY_CSUM = "csum";
-    public static final String PROPERTY_PATIENT_ID_MAP = "patient.id.map";
-    public static final String PROPERTY_PID = "pid";
-    public static final String PROPERTY_VERBOSE = "verbose";
-    public static final String PROPERTY_LOGGING = "logging";
+    public static final String PROPERTY_CONTINUE_ON_ERROR = "upload.continue-on-error";
+    public static final String PROPERTY_CSUM = "upload.csum";
+    public static final String PROPERTY_PATIENT_ID_MAP = "upload.patient.id.map";
+    public static final String PROPERTY_PID = "upload.pid";
+    public static final String PROPERTY_VERBOSE = "upload.verbose";
+    public static final String PROPERTY_LOGGING = "upload.logging";
 
     private boolean _continueOnError;
     private boolean _csum;
@@ -154,27 +149,6 @@ public class DataUploadSettings extends ConnectionSettings {
         if (_files.isEmpty()) {
             throw new IllegalArgumentException("Missing input dicom files or directories");
         }
-    }
-
-    public static DataUploadSettings loadFromPropertiesFile(File propertiesFile) {
-        Properties properties = new Properties();
-        try {
-            if (propertiesFile.exists()) {
-                InputStream in = new BufferedInputStream(new FileInputStream(propertiesFile));
-                try {
-                    properties.load(in);
-                } finally {
-                    in.close();
-                }
-            }
-        } catch (Throwable e) {
-            e.printStackTrace();
-        }
-        return new DataUploadSettings(properties);
-    }
-
-    public static DataUploadSettings loadFromPropertiesFile(String propertiesFilePath) {
-        return loadFromPropertiesFile(new File(propertiesFilePath));
     }
 
 }

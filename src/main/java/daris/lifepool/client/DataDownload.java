@@ -1,4 +1,4 @@
-package daris.lifepool.client.download;
+package daris.lifepool.client;
 
 import java.io.File;
 import java.io.FileNotFoundException;

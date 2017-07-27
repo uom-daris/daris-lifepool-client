@@ -1,5 +1,9 @@
-package daris.lifepool.client.connection;
+package daris.lifepool.client;
 
+import java.io.BufferedInputStream;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.InputStream;
 import java.util.Properties;
 
 import arc.mf.client.AuthenticationDetails;
@@ -74,6 +78,30 @@ public class ConnectionSettings {
             if (properties.containsKey(PROPERTY_SID)) {
                 _sid = properties.getProperty(PROPERTY_SID);
             }
+        }
+    }
+
+    protected void loadFromPropertiesFile(File propertiesFile) {
+        Properties properties = new Properties();
+        try {
+            if (propertiesFile.exists()) {
+                InputStream in = new BufferedInputStream(new FileInputStream(propertiesFile));
+                try {
+                    properties.load(in);
+                } finally {
+                    in.close();
+                }
+            }
+        } catch (Throwable e) {
+            e.printStackTrace();
+        }
+        loadFromProperties(properties);
+    }
+
+    public void loadFromDefaultPropertiesFile() {
+        File file = new File(Applications.PROPERTIES_FILE);
+        if (file.exists()) {
+            loadFromPropertiesFile(file);
         }
     }
 

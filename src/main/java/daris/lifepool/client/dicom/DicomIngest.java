@@ -11,6 +11,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 import com.pixelmed.dicom.AttributeList;
 import com.pixelmed.dicom.TransferSyntax;
@@ -127,7 +129,7 @@ public class DicomIngest {
     }
 
     public static String ingest(ServerClient.Connection cxn, AttributeList attributeList, String sourcePath,
-            String projectCid) throws Throwable {
+            String projectCid, Logger logger) throws Throwable {
         Settings settings = new Settings();
         settings.setEngine("nig.dicom");
         settings.setAnonymize(true);
@@ -141,7 +143,7 @@ public class DicomIngest {
         settings.setArg("nig.dicom.subject.name.from.id", "true");
         settings.setArg("nig.dicom.write.mf-dicom-patient", "true");
         settings.setArg("nig.dicom.id.citable", projectCid);
-        return ingest(cxn, attributeList, sourcePath, settings);
+        return ingest(cxn, attributeList, sourcePath, settings, logger);
     }
 
     public static String ingest(ServerClient.Connection cxn, File dicomFile, String projectCid) throws Throwable {
@@ -200,7 +202,7 @@ public class DicomIngest {
     }
 
     public static String ingest(ServerClient.Connection cxn, final AttributeList attributeList, final String sourcePath,
-            final Settings settings) throws Throwable {
+            final Settings settings, final Logger logger) throws Throwable {
 
         XmlStringWriter w = new XmlStringWriter();
         settings.save(w);
@@ -226,6 +228,9 @@ public class DicomIngest {
                                 pos.close();
                             }
                         } catch (Throwable e) {
+                            if(logger!=null){
+                                logger.log(Level.SEVERE, e.getMessage(), e);
+                            }
                             System.err.println("Error in worker thread: " + Thread.currentThread().getName());
                             e.printStackTrace(System.err);
                             workerException[0] = e;

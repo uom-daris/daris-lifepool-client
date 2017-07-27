@@ -1,6 +1,9 @@
-package daris.lifepool.client.upload;
+package daris.lifepool.client.cli;
 
 import java.io.File;
+
+import daris.lifepool.client.DataUpload;
+import daris.lifepool.client.DataUploadSettings;
 
 public class DataUploadCLI {
 
@@ -8,8 +11,9 @@ public class DataUploadCLI {
         /*
          * load, parse & validate settings
          */
-        DataUploadSettings settings = DataUpload.loadSettingsFromPropertiesFile();
+        DataUploadSettings settings = new DataUploadSettings();
         try {
+            settings.loadFromDefaultPropertiesFile();
             for (int i = 0; i < args.length;) {
                 if (args[i].equals("--help") || args[i].equals("-h")) {
                     showHelp();

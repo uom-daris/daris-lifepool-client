@@ -6,7 +6,7 @@ import java.util.logging.Logger;
 
 import arc.mf.client.RemoteServer;
 import arc.mf.client.ServerClient;
-import daris.lifepool.client.connection.ConnectionSettings;
+import daris.lifepool.client.ConnectionSettings;
 
 public abstract class Task<T> implements Callable<T> {
 
@@ -89,6 +89,10 @@ public abstract class Task<T> implements Callable<T> {
 
     protected void logError(String message) {
         log(Level.SEVERE, message, 0, null);
+    }
+    
+    protected void logError(Throwable e){
+        log(Level.SEVERE, e.getMessage(), 0, e);        
     }
 
 }

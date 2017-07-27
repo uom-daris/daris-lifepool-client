@@ -16,7 +16,7 @@ import com.pixelmed.dicom.SetOfDicomFiles;
 import com.pixelmed.dicom.TagFromName;
 import com.pixelmed.dicom.TransferSyntax;
 
-import daris.lifepool.client.Constants;
+import daris.lifepool.client.Applications;
 
 public class DicomModify {
 
@@ -101,9 +101,9 @@ public class DicomModify {
 
         if (mediaStorageSOPClassUID != null && mediaStorageSOPInstanceUID != null) {
             FileMetaInformation.addFileMetaInformation(list, mediaStorageSOPClassUID, mediaStorageSOPInstanceUID,
-                    TransferSyntax.ExplicitVRLittleEndian, Constants.DICOM_AE_TITLE);
+                    TransferSyntax.ExplicitVRLittleEndian, Applications.DICOM_AE_TITLE);
         } else {
-            FileMetaInformation.addFileMetaInformation(list, TransferSyntax.ExplicitVRLittleEndian, Constants.DICOM_AE_TITLE);
+            FileMetaInformation.addFileMetaInformation(list, TransferSyntax.ExplicitVRLittleEndian, Applications.DICOM_AE_TITLE);
         }
 
         list.write(os, TransferSyntax.ExplicitVRLittleEndian, true, true);
