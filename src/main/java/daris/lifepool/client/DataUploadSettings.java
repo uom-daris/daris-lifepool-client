@@ -141,10 +141,14 @@ public class DataUploadSettings extends ConnectionSettings {
     public void validate() throws Throwable {
         super.validate();
         if (_pid == null) {
-            throw new IllegalArgumentException("Missing " + PROPERTY_PID);
+            throw new IllegalArgumentException("Missing pid");
         }
         if (_patientIdMappingFile == null) {
-            throw new IllegalArgumentException("Missing " + PROPERTY_PATIENT_ID_MAP);
+            throw new IllegalArgumentException("Missing patient.id.map");
+        }
+        if (!_patientIdMappingFile.exists()) {
+            throw new IllegalArgumentException(
+                    "patient.id.map file: '" + _patientIdMappingFile.getPath() + "' does not exist.");
         }
         if (_files.isEmpty()) {
             throw new IllegalArgumentException("Missing input dicom files or directories");
