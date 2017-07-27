@@ -7,10 +7,10 @@ import java.util.Set;
 
 public class DataUploadSettings extends ConnectionSettings {
 
+    public static final String PROPERTY_PID = "pid";
     public static final String PROPERTY_CONTINUE_ON_ERROR = "upload.continue-on-error";
     public static final String PROPERTY_CSUM = "upload.csum";
     public static final String PROPERTY_PATIENT_ID_MAP = "upload.patient.id.map";
-    public static final String PROPERTY_PID = "upload.pid";
     public static final String PROPERTY_VERBOSE = "upload.verbose";
     public static final String PROPERTY_LOGGING = "upload.logging";
 

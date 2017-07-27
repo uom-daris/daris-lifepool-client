@@ -1,0 +1,15 @@
+2017-07-27 13:20:00.131 [thread 1]    INFO loading (AccessionNumber -> PatientID) mapping from file: '/Users/wliu5/Downloads/AccessionNoKey.csv'
+2017-07-27 13:20:00.953 [thread 1]  SEVERE Authentication failure - invalid credentials.
+arc.mf.client.ServerClient$ExAuthenticationFailure: Authentication failure - invalid credentials.
+	at arc.mf.client.ServerClient$Connection.executeNoPreSend(ServerClient.java:2146)
+	at arc.mf.client.ServerClient$Connection.executeMultiInput(ServerClient.java:2044)
+	at arc.mf.client.ServerClient$Connection.execute(ServerClient.java:1990)
+	at arc.mf.client.ServerClient$Connection.execute(ServerClient.java:1964)
+	at arc.mf.client.ServerClient$Connection.execute(ServerClient.java:1949)
+	at arc.mf.client.ServerClient$Connection.doConnect(ServerClient.java:2523)
+	at arc.mf.client.ServerClient$Connection.connect(ServerClient.java:1804)
+	at daris.lifepool.client.task.Task.connect(Task.java:20)
+	at daris.lifepool.client.DataUpload.execute(DataUpload.java:121)
+	at daris.lifepool.client.DataUpload.call(DataUpload.java:100)
+	at daris.lifepool.client.cli.DataUploadCLI.main(DataUploadCLI.java:89)
+
