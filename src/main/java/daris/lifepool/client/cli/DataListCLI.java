@@ -1,6 +1,6 @@
 package daris.lifepool.client.cli;
 
-import java.util.List;
+import java.util.Set;
 
 import daris.lifepool.client.DataList;
 import daris.lifepool.client.DataList.ResultEntry;
@@ -48,6 +48,16 @@ public class DataListCLI {
                 } else if (args[i].equals("--pid")) {
                     settings.setProjectId(args[i + 1]);
                     i += 2;
+                } else if (args[i].equals("--patient-id")) {
+                    if (args[i + 1].indexOf(',') != -1) {
+                        String[] patientIds = args[i + 1].split(",");
+                        for (String patientId : patientIds) {
+                            settings.addPatientId(patientId);
+                        }
+                    } else {
+                        settings.addPatientId(args[i + 1]);
+                    }
+                    i += 2;
                 } else {
                     settings.addAccessionNumber(args[i]);
                     i++;
@@ -63,12 +73,13 @@ public class DataListCLI {
         /*
          * upload
          */
-        List<ResultEntry> entries = new DataList(settings).call();
+        Set<ResultEntry> entries = new DataList(settings).call();
         if (entries != null) {
-            System.out.println(String.format("%-32s    %-16s    %s", "DaRIS_ID", "Accession_Number", "File_Name"));
+            System.out.println(String.format("%-20s  %-16s  %-16s  %s", "DaRIS_ID", "Patient_ID", "Accession_Number",
+                    "File_Name"));
             for (ResultEntry entry : entries) {
-                System.out.println(
-                        String.format("%-32s    %-16s    %s", entry.cid(), entry.accessionNumber(), entry.fileName()));
+                System.out.println(String.format("%-20s  %-16s  %-16s  %s", entry.cid(), entry.patientId(),
+                        entry.accessionNumber(), entry.fileName()));
             }
         }
     }
@@ -76,7 +87,7 @@ public class DataListCLI {
     private static void showHelp() {
         // @formatter:off
         System.out.println();
-        System.out.println("Usage: daris-lifepool-data-liset [--help] --mf.host <host> --mf.port <port> --mf.transport <transport> [--mf.token <token>|--mf.auth <domain,user,password>|--mf.sid <sid>] --pid <project-cid> <accession numbers>");
+        System.out.println("Usage: daris-lifepool-data-liset [--help] --mf.host <host> --mf.port <port> --mf.transport <transport> [--mf.token <token>|--mf.auth <domain,user,password>|--mf.sid <sid>] --pid <project-cid> [--patient-id <patient-ids>] [accession numbers]");
         System.out.println();
         System.out.println("Options:");
         System.out.println("    --mf.host <host>                     The Mediaflux server host.");
@@ -86,9 +97,13 @@ public class DataListCLI {
         System.out.println("    --mf.token <token>                   The Mediaflux secure identity token.");
         System.out.println("    --mf.sid <sid>                       The Mediaflux session id.");
         System.out.println("    --pid <project-cid>                  The DaRIS project cid.");
+        System.out.println("    --patient-id <patient-ids>           One or more patient ids, separated with commas to select the images.");
         System.out.println();
         System.out.println("Switches:");        
         System.out.println("    --help                               Display help information.");
+        System.out.println();
+        System.out.println("Arguments:");        
+        System.out.println("    [accession numbers]                  One or more accession numbers to select the images.");        
         System.out.println();
         // @formatter:on
     }

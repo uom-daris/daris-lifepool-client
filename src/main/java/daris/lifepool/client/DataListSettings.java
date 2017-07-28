@@ -1,22 +1,23 @@
 package daris.lifepool.client;
 
-import java.util.ArrayList;
-import java.util.LinkedHashSet;
-import java.util.List;
+import java.util.Collections;
 import java.util.Properties;
 import java.util.Set;
+import java.util.TreeSet;
 
 public class DataListSettings extends ConnectionSettings {
 
     public static final String PROPERTY_PID = "pid";
 
     private Set<String> _accessionNumbers;
+    private Set<String> _patientIds;
 
     private String _pid;
 
     public DataListSettings(Properties properties) {
         super(properties);
-        _accessionNumbers = new LinkedHashSet<String>();
+        _accessionNumbers = new TreeSet<String>();
+        _patientIds = new TreeSet<String>();
     }
 
     public DataListSettings() {
@@ -27,8 +28,16 @@ public class DataListSettings extends ConnectionSettings {
         _accessionNumbers.add(accessionNumber);
     }
 
-    public List<String> accesionNumbers() {
-        return new ArrayList<String>(_accessionNumbers);
+    public Set<String> accesionNumbers() {
+        return Collections.unmodifiableSet(_accessionNumbers);
+    }
+
+    public void addPatientId(String patientId) {
+        _patientIds.add(patientId);
+    }
+
+    public Set<String> patientIds() {
+        return Collections.unmodifiableSet(_patientIds);
     }
 
     public String projectId() {
@@ -50,8 +59,8 @@ public class DataListSettings extends ConnectionSettings {
 
     public void validate() throws Throwable {
         super.validate();
-        if (_accessionNumbers.isEmpty()) {
-            throw new IllegalArgumentException("Missing accession numbers.");
+        if (_accessionNumbers.isEmpty() && _patientIds.isEmpty()) {
+            throw new IllegalArgumentException("Missing accession numbers or patient ids.");
         }
     }
 
