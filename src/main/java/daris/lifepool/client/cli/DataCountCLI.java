@@ -75,7 +75,7 @@ public class DataCountCLI {
     private static void showHelp() {
         // @formatter:off
         System.out.println();
-        System.out.println("Usage: daris-lifepool-data-liset [--help] --mf.host <host> --mf.port <port> --mf.transport <transport> [--mf.token <token>|--mf.auth <domain,user,password>|--mf.sid <sid>] --pid <project-cid> [--patient-id <patient-ids>] [accession numbers]");
+        System.out.println("Usage: daris-lifepool-data-count [--help] --mf.host <host> --mf.port <port> --mf.transport <transport> [--mf.token <token>|--mf.auth <domain,user,password>|--mf.sid <sid>] --pid <project-cid>");
         System.out.println();
         System.out.println("Options:");
         System.out.println("    --mf.host <host>                     The Mediaflux server host.");
@@ -85,13 +85,9 @@ public class DataCountCLI {
         System.out.println("    --mf.token <token>                   The Mediaflux secure identity token.");
         System.out.println("    --mf.sid <sid>                       The Mediaflux session id.");
         System.out.println("    --pid <project-cid>                  The DaRIS project cid.");
-        System.out.println("    --patient-id <patient-ids>           One or more patient ids, separated with commas to select the images.");
         System.out.println();
         System.out.println("Switches:");        
         System.out.println("    --help                               Display help information.");
-        System.out.println();
-        System.out.println("Arguments:");        
-        System.out.println("    [accession numbers]                  One or more accession numbers to select the images.");        
         System.out.println();
         // @formatter:on
     }

@@ -87,7 +87,7 @@ public class DataListCLI {
     private static void showHelp() {
         // @formatter:off
         System.out.println();
-        System.out.println("Usage: daris-lifepool-data-liset [--help] --mf.host <host> --mf.port <port> --mf.transport <transport> [--mf.token <token>|--mf.auth <domain,user,password>|--mf.sid <sid>] --pid <project-cid> [--patient-id <patient-ids>] [accession numbers]");
+        System.out.println("Usage: daris-lifepool-data-list [--help] --mf.host <host> --mf.port <port> --mf.transport <transport> [--mf.token <token>|--mf.auth <domain,user,password>|--mf.sid <sid>] --pid <project-cid> [--patient-id <patient-ids>] [accession numbers]");
         System.out.println();
         System.out.println("Options:");
         System.out.println("    --mf.host <host>                     The Mediaflux server host.");
