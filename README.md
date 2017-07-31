@@ -2,7 +2,7 @@
 
 ## I. Installation
 
-  * *Pre-requsites*
+  * **Pre-requsites**
     * Java 8
   * Download from https://github.com/uom-daris/daris-lifepool-client/releases/latest
   * Extract daris-lifepool-client-x.y.z.zip
@@ -15,7 +15,7 @@
 The utility to upload local dicom files to DaRIS repository. The local data must conform the following directory struture:
      <Accession>/<SOPInstnaceUID>.dcm
 
-  * *Usage:*
+  * **Usage:**
 ```
 Usage: daris-lifepool-data-upload [--help] --mf.host <host> --mf.port <port> --mf.transport <transport> [--mf.token <token>|--mf.auth <domain,user,password>|--mf.sid <sid>] [--csum] [--continue-on-error] [--verbose] --pid <project-cid> <dicom-files/dicom-directories>
 
@@ -41,7 +41,7 @@ Switches:
 ### 1.2. daris-lifepool-data-list
 The command line utility to list the images that belongs to the give patients or accessions.
 
-  * *Usage:*
+  * **Usage:**
 ```
 Usage: daris-lifepool-data-list [--help] --mf.host <host> --mf.port <port> --mf.transport <transport> [--mf.token <token>|--mf.auth <domain,user,password>|--mf.sid <sid>] --pid <project-cid> [--patient-id <patient-ids>] [accession numbers]
 
@@ -66,7 +66,7 @@ Arguments:
 
 The command line utility to show statistics of the lifepool project: number of images, number of accessions, number of patients and total storage usage(NOTE: total storage usage is less than the total image file size because the data are compressed).
 
-  * *Usage:*
+  * **Usage:**
 ```
 Usage: daris-lifepool-data-count [--help] --mf.host <host> --mf.port <port> --mf.transport <transport> [--mf.token <token>|--mf.auth <domain,user,password>|--mf.sid <sid>] --pid <project-cid>
 
@@ -84,5 +84,28 @@ Switches:
 ```
 ## III. Configuration File
 
+The arguments of the above command line utilities can be specified in the configuration file. see example below:
+
+```
+mf.host=mediaflux.your-domain.org
+mf.port=443
+mf.transport=https
+mf.token=XXXXXXXXXX
+pid=1128.1.3
+upload.patient.id.map=E:/Users/wliu5/Downloads/AccessionNoKey.csv
+upload.verbose=true
+upload.logging=true
+```
+
+Configuration file can be created at:
+  * **$HOME/.daris/daris-lifepool-client.properties** If running on Linux/Mac/Unix.
+  * **%USERPROFILE%\.daris\daris-lifepool-client.properties** If running on Windows.
+
+  * **NOTE:** to create **.daris** directory on Windows, open command prompt window, and type the following commands:
+```
+cd %userprofile%
+md .daris
+```
+  
 
 
